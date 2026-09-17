@@ -38,10 +38,10 @@
 | 1 | Providers: `LLMResult` contract + usage parsing (ollama, openai-compatible) | done | 6038a97 |
 | 2 | OpenCodeGoProvider: default endpoint/model, x-opencode-session + User-Agent, key-missing error | done | 6038a97 |
 | 3 | Config/env: GO base URL + model defaults, cost rates (USD/1k in/out); contract test sync | done | 6038a97 |
-| 4 | `llm_usage` table + migration + repository | in_progress | |
-| 5 | ChatService cost recording + `GET /api/v1/usage` (recent + totals) | pending | |
-| 6 | Tests: usage parse paths, Go defaults/headers, usage service + endpoint | pending | |
-| 7 | Live validation: OpenCode Go chat (real key), PayPerQ chat (user `.env` key); README update | pending | |
+| 4 | `llm_usage` table + migration + repository | done | dacac40 |
+| 5 | ChatService cost recording + `GET /api/v1/usage` (recent + totals) | done | dacac40 |
+| 6 | Tests: usage parse paths, Go defaults/headers, usage service + endpoint | done | dacac40 |
+| 7 | Live validation: OpenCode Go chat (real key), PayPerQ chat (user `.env` key); README update | in_progress | |
 
 ## Acceptance criteria
 
@@ -53,3 +53,4 @@
 ## Evidence
 
 - `6038a97` feat: usage-aware LLM contract and live-ready OpenCode Go provider (tasks 1–3).
+- `dacac40` feat: record LLM usage and cost, expose /api/v1/usage (tasks 4–6).

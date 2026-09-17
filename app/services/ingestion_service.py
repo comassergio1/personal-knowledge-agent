@@ -108,8 +108,14 @@ class IngestionService:
             # qdrant-client transport errors share no common base class.
             raise IngestionError(f"Failed to upsert vector points: {exc}") from exc
 
-        for chunk in document.chunks:
-            chunk.embedding_id = chunk.id
+        # Persist embedding ids in a committed write: mutating the tracked
+        # objects without committing left an open write transaction on the
+        # shared app-scoped session, holding the SQLite write lock and
+        # failing later writers ("database is locked") — see the repository
+        # method docstring.
+        await self._documents.update_chunk_embedding_ids(
+            [(chunk.id, chunk.id) for chunk in document.chunks]
+        )
 
         persisted = await self._documents.get(document.id)
         return persisted if persisted is not None else document

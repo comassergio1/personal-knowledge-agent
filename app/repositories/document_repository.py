@@ -75,3 +75,22 @@ class DocumentRepository:
         await self._session.delete(document)
         await self._session.commit()
         return True
+
+    async def update_chunk_embedding_ids(
+        self, pairs: Sequence[tuple[str, str]]
+    ) -> None:
+        """Persist ``(chunk_id, embedding_id)`` pairs in one committed write.
+
+        The chunk rows are already tracked by this session (created together
+        with the document), so mutation + a single :meth:`commit` persists
+        them. Committing is what releases the SQLite write lock: an earlier
+        version reused mutating objects on the shared app-scoped session
+        without committing, leaving an open write transaction that locked the
+        database for every later writer (observed live as "database is
+        locked" on the ``llm_usage`` insert).
+        """
+        for chunk_id, embedding_id in pairs:
+            chunk = await self._session.get(Chunk, chunk_id)
+            if chunk is not None:
+                chunk.embedding_id = embedding_id
+        await self._session.commit()

@@ -30,6 +30,7 @@ from app.api.routes.health import router as health_router
 from app.api.routes.usage import router as usage_router
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger, setup_logging
+from app.database import create_app_engine
 from app.domain.models import Base
 from app.providers.embeddings.base import EmbeddingProvider
 from app.providers.embeddings.factory import EmbeddingProviderFactory
@@ -154,7 +155,7 @@ def _build_engine(settings: Settings) -> AsyncEngine:
         Path(url.database or ".").expanduser().resolve().parent.mkdir(
             parents=True, exist_ok=True
         )
-    return create_async_engine(settings.database_url)
+    return create_app_engine(settings.database_url)
 
 
 async def _close_resource(resource: object) -> None:
