@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_TEMPLATE = PROJECT_ROOT / "env.template"
 
 # Exactly the names documented in spec §27 / env.template.
-EXPECTED_ENV_NAMES = 13
+EXPECTED_ENV_NAMES = 15
 
 
 def test_settings_defaults_match_env_example() -> None:
@@ -24,7 +24,7 @@ def test_settings_defaults_match_env_example() -> None:
         field_name = name.strip().lower()
         assert field_name in Settings.model_fields, f"Settings is missing field for {name}"
         assert (
-            getattr(settings, field_name) == value.strip()
+            str(getattr(settings, field_name)) == value.strip()
         ), f"default mismatch for {name}"
         checked += 1
     assert checked == EXPECTED_ENV_NAMES

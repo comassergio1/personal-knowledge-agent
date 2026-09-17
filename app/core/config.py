@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     # Embedding provider and model
     embedding_provider: str = "ollama"
     embedding_model: str = "nomic-embed-text"
+    # Bootstrap dimensionality for the Qdrant collection (nomic-embed-text).
+    embedding_dimensions: int = 768
+
+    # HTTP timeout for LLM calls (seconds): local models need generous timeouts.
+    llm_timeout_seconds: int = 300
 
 
 @lru_cache
