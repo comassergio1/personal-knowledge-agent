@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_TEMPLATE = PROJECT_ROOT / "env.template"
 
 # Exactly the names documented in spec §27 / env.template.
-EXPECTED_ENV_NAMES = 15
+EXPECTED_ENV_NAMES = 17
 
 
 def test_settings_defaults_match_env_example() -> None:

@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     # HTTP timeout for LLM calls (seconds): local models need generous timeouts.
     llm_timeout_seconds: int = 300
 
+    # Document chunking defaults for ingestion (see app.services.chunking).
+    chunk_size: int = 1000
+    chunk_overlap: int = 120
+
 
 @lru_cache
 def get_settings() -> Settings:

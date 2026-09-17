@@ -35,9 +35,9 @@ Web UI, memory extraction/approval, research agent, tutorial generator, coding a
 | 1 | Repo bootstrap: git init, pyproject.toml (uv), .python-version 3.12, .gitignore, env.template, docker-compose.yml (Qdrant), README skeleton, Alembic init | done | (see Evidence) |
 | 2 | Core: `core/config.py` (pydantic-settings) + `core/logging.py` | done | (see Evidence) |
 | 3 | Persistence: SQLAlchemy `Document` model + `document_repository` + initial migration | done | (see Evidence) |
-| 4 | Providers: LLM gateway (`base`, `ollama`, `payperq`, `opencode_go`, `factory`) + embeddings (`base`, `ollama`) | pending | |
-| 5 | Vector: `vector/qdrant.py` client + `vector/collections.py` bootstrap (create collection + payload index) | pending | |
-| 6 | Services: `ingestion_service` (markdown/txt chunking, embed, upsert), `retrieval_service` (embed → search → top-k), `chat_service` (context build per §25, gateway call, sources) | pending | |
+| 4 | Providers: LLM gateway (`base`, `ollama`, `payperq`, `opencode_go`, `factory`) + embeddings (`base`, `ollama`) | done | c6246e0 |
+| 5 | Vector: `vector/qdrant.py` client + `vector/collections.py` bootstrap (create collection + payload index) | done | c6246e0 |
+| 6 | Services: `ingestion_service` (markdown/txt chunking, embed, upsert), `retrieval_service` (embed → search → top-k), `chat_service` (context build per §25, gateway call, sources) | in_progress | |
 | 7 | API: routes `chat`, `documents`, `health` + `api/dependencies.py` + `main.py` + schemas | pending | |
 | 8 | Tests: unit (chunking, retrieval with fake store, chat with fake providers, factory) + API integration (TestClient, in-memory) | pending | |
 | 9 | README quickstart + live end-to-end verification (real Qdrant via Docker, real Ollama) | pending | |
@@ -51,4 +51,5 @@ Web UI, memory extraction/approval, research agent, tutorial generator, coding a
 
 ## Evidence
 
-- `015973a` feat: bootstrap PKA scaffold with config, persistence, and migrations (tasks 1–3).
+- `015973a`/`7228260` feat: bootstrap PKA scaffold with config, persistence, and migrations (tasks 1–3).
+- `c6246e0` feat: add LLM gateway, embedding providers, and Qdrant vector store (tasks 4–5; included LLM_TIMEOUT_SECONDS fix).
