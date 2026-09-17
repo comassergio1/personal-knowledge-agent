@@ -43,3 +43,7 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
                 "Ollama embedding response missing embeddings"
             )
         return embeddings[0]
+
+    async def close(self) -> None:
+        """Close the underlying httpx client."""
+        await self._client.aclose()

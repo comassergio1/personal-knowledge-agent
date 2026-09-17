@@ -36,3 +36,6 @@ class LLMProvider(ABC):
         self, messages: list[ChatMessage], *, model: str | None = None, **kwargs
     ) -> str:
         """Return the assistant reply to ``messages`` as plain text."""
+
+    async def close(self) -> None:
+        """Release any held resources; no-op unless overridden."""

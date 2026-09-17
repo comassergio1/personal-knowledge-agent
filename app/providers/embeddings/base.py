@@ -18,3 +18,6 @@ class EmbeddingProvider(ABC):
     @abstractmethod
     async def embed(self, text: str) -> list[float]:
         """Embed ``text`` into a fixed-size vector."""
+
+    async def close(self) -> None:
+        """Release any held resources; no-op unless overridden."""

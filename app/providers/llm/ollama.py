@@ -46,3 +46,7 @@ class OllamaProvider(LLMProvider):
         if not message or not message.get("content"):
             raise LLMProviderError("Ollama response missing message.content")
         return message["content"]
+
+    async def close(self) -> None:
+        """Close the underlying httpx client."""
+        await self._client.aclose()

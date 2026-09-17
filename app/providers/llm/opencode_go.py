@@ -59,3 +59,8 @@ class OpenCodeGoProvider(LLMProvider):
         if content is None:
             raise LLMProviderError("OpenCode Go returned an empty completion")
         return content
+
+    async def close(self) -> None:
+        """Close the OpenAI client when it was created (lazy init)."""
+        if self._client is not None:
+            await self._client.close()
