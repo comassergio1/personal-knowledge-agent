@@ -27,6 +27,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.routes.chat import router as chat_router
 from app.api.routes.documents import router as documents_router
 from app.api.routes.health import router as health_router
+from app.api.routes.usage import router as usage_router
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger, setup_logging
 from app.domain.models import Base
@@ -35,6 +36,7 @@ from app.providers.embeddings.factory import EmbeddingProviderFactory
 from app.providers.llm.base import LLMProvider, LLMResult
 from app.providers.llm.factory import LLMProviderFactory
 from app.repositories.document_repository import DocumentRepository
+from app.repositories.usage_repository import UsageRepository
 from app.services.chat_service import ChatService
 from app.services.ingestion_service import IngestionService
 from app.services.retrieval_service import RetrievalService
@@ -194,8 +196,10 @@ def _make_lifespan(
         # request-scoped sessions (``get_db``) cover route-level queries.
         ingestion_session = session_factory()
         document_repository = DocumentRepository(ingestion_session)
+        usage_session = session_factory()
+        usage_repository = UsageRepository(usage_session)
         retrieval_service = RetrievalService(vector_store, embeddings)
-        chat_service = ChatService(llm, retrieval_service, settings)
+        chat_service = ChatService(llm, retrieval_service, settings, usage_repository)
 
         app.state.settings = settings
         app.state.engine = engine
@@ -209,6 +213,7 @@ def _make_lifespan(
         )
         app.state.retrieval_service = retrieval_service
         app.state.chat_service = chat_service
+        app.state.usage_repository = usage_repository
 
         _logger.info(
             "application started",
@@ -220,6 +225,7 @@ def _make_lifespan(
             for resource in (vector_store, llm, embeddings):
                 await _close_resource(resource)
             await ingestion_session.close()
+            await usage_session.close()
             await engine.dispose()
             _logger.info("application stopped", extra={"env": settings.app_env})
 
@@ -245,4 +251,5 @@ def create_app(settings: Settings | None = None, *, testing: bool = False) -> Fa
     app.include_router(chat_router, prefix="/api/v1")
     app.include_router(documents_router, prefix="/api/v1")
     app.include_router(health_router, prefix="/api/v1")
+    app.include_router(usage_router, prefix="/api/v1")
     return app

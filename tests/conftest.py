@@ -14,9 +14,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-import app.domain.models.document  # noqa: F401  (register tables on Base.metadata)
 from app.core.config import Settings
-from app.domain.models import Base
+from app.domain.models import (  # noqa: F401  (register tables on Base.metadata)
+    Base,
+    document,
+    usage,
+)
 from app.main import create_app
 
 

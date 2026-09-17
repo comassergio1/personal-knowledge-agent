@@ -15,6 +15,7 @@ import uuid
 from app.core.config import Settings
 from app.core.logging import get_logger
 from app.providers.llm.base import ChatMessage, LLMProvider
+from app.repositories.usage_repository import UsageRepository
 from app.schemas.chat import ChatResult, SourceRef
 from app.services.retrieval_service import RetrievalService
 from app.vector.collections import CHUNK_INDEX_FIELD
@@ -26,15 +27,50 @@ _SYSTEM_PROMPT = (
 _EXCERPT_LENGTH = 200
 
 
+# Provider name -> (USD per 1k input tokens, USD per 1k output tokens). The
+# rates come from Settings so cost accounting never hardcodes billing (spec
+# §30); unknown providers (e.g. the test fake) estimate at zero cost.
+def _provider_rates(
+    provider: str, settings: Settings
+) -> tuple[float, float]:
+    rates: dict[str, tuple[float, float]] = {
+        "ollama": (settings.ollama_usd_per_1k_in, settings.ollama_usd_per_1k_out),
+        "payperq": (settings.payperq_usd_per_1k_in, settings.payperq_usd_per_1k_out),
+        "opencode_go": (
+            settings.opencode_go_usd_per_1k_in,
+            settings.opencode_go_usd_per_1k_out,
+        ),
+    }
+    return rates.get(provider.strip().lower(), (0.0, 0.0))
+
+
+def _estimate_cost_usd(
+    provider: str,
+    settings: Settings,
+    prompt_tokens: int | None,
+    completion_tokens: int | None,
+) -> float:
+    """Estimate the request cost in USD from the provider's per-1k rates."""
+    rate_in, rate_out = _provider_rates(provider, settings)
+    tokens_in = prompt_tokens or 0
+    tokens_out = completion_tokens or 0
+    return (tokens_in / 1000 * rate_in) + (tokens_out / 1000 * rate_out)
+
+
 class ChatService:
     """Answers a message using retrieved knowledge and an LLM gateway."""
 
     def __init__(
-        self, llm: LLMProvider, retrieval: RetrievalService, settings: Settings
+        self,
+        llm: LLMProvider,
+        retrieval: RetrievalService,
+        settings: Settings,
+        usage_repository: UsageRepository | None = None,
     ) -> None:
         self._llm = llm
         self._retrieval = retrieval
         self._settings = settings
+        self._usage_repository = usage_repository
         self._logger = get_logger("chat_service")
 
     async def chat(
@@ -75,6 +111,24 @@ class ChatService:
         ]
 
         latency_ms = int((time.perf_counter() - started) * 1000)
+        prompt_tokens = result.prompt_tokens
+        completion_tokens = result.completion_tokens
+        estimated_cost_usd = _estimate_cost_usd(
+            provider=result.provider,
+            settings=self._settings,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        )
+        if self._usage_repository is not None:
+            await self._usage_repository.create(
+                request_id=request_id,
+                provider=result.provider,
+                model=result.model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                estimated_cost_usd=estimated_cost_usd,
+                latency_ms=latency_ms,
+            )
         self._logger.info(
             "chat request completed",
             extra={
@@ -84,6 +138,9 @@ class ChatService:
                 "retrieved_chunks": len(hits),
                 "latency_ms": latency_ms,
                 "answer_length": len(answer),
+                "input_tokens": prompt_tokens,
+                "output_tokens": completion_tokens,
+                "estimated_cost_usd": estimated_cost_usd,
             },
         )
         return ChatResult(answer=answer, sources=sources)

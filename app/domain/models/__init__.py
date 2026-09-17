@@ -4,5 +4,6 @@
 
 from app.domain.models.base import Base
 from app.domain.models.document import Chunk, Document
+from app.domain.models.usage import LLMUsage
 
-__all__ = ["Base", "Chunk", "Document"]
+__all__ = ["Base", "Chunk", "Document", "LLMUsage"]
