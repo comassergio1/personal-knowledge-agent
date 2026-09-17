@@ -44,6 +44,9 @@ def _test_settings() -> Settings:
         _env_file=None,
         app_env="test",
         database_url="sqlite+aiosqlite:///:memory:",
+        # Dead endpoint so the health probe is hermetic: it reports False even
+        # when a real Ollama daemon is running on this machine.
+        ollama_base_url="http://127.0.0.1:59999",
     )
 
 

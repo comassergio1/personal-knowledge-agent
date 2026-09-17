@@ -3,7 +3,9 @@
 **Project**: Personal Knowledge Agent (PKA) — self-hosted personal knowledge OS.
 **Spec source**: `Personal Knowledge Agent.md` (Obsidian Vault, "Memoria local rag"), sections 10, 41, 42.
 **Branch policy**: commits on `main` (fresh repo), one Conventional Commit per work unit.
-**Status**: in_progress
+**Status**: done — vertical slice complete and verified live (2026-09-17).
+
+> **Note**: `.env.example` from the spec is committed as `env.template` because Pi's safety policy blocks the `.env*` pattern (user-approved rename).
 
 ## Scope (vertical slice, §41)
 
@@ -38,9 +40,9 @@ Web UI, memory extraction/approval, research agent, tutorial generator, coding a
 | 4 | Providers: LLM gateway (`base`, `ollama`, `payperq`, `opencode_go`, `factory`) + embeddings (`base`, `ollama`) | done | c6246e0 |
 | 5 | Vector: `vector/qdrant.py` client + `vector/collections.py` bootstrap (create collection + payload index) | done | c6246e0 |
 | 6 | Services: `ingestion_service` (markdown/txt chunking, embed, upsert), `retrieval_service` (embed → search → top-k), `chat_service` (context build per §25, gateway call, sources) | done | b5f8499 |
-| 7 | API: routes `chat`, `documents`, `health` + `api/dependencies.py` + `main.py` + schemas | in_progress | |
-| 8 | Tests: unit (chunking, retrieval with fake store, chat with fake providers, factory) + API integration (TestClient, in-memory) | pending | |
-| 9 | README quickstart + live end-to-end verification (real Qdrant via Docker, real Ollama) | pending | |
+| 7 | API: routes `chat`, `documents`, `health` + `api/dependencies.py` + `main.py` + schemas | done | d3fe19c |
+| 8 | Tests: unit (chunking, retrieval with fake store, chat with fake providers, factory) + API integration (TestClient, in-memory) | done | d3fe19c |
+| 9 | README quickstart + live end-to-end verification (real Qdrant via Docker, real Ollama) | done | 78a8eb7 + fix |
 
 ## Acceptance criteria
 
@@ -54,4 +56,13 @@ Web UI, memory extraction/approval, research agent, tutorial generator, coding a
 - `015973a`/`7228260` feat: bootstrap PKA scaffold with config, persistence, and migrations (tasks 1–3).
 - `c6246e0` feat: add LLM gateway, embedding providers, and Qdrant vector store (tasks 4–5; included LLM_TIMEOUT_SECONDS fix).
 - `b5f8499` feat: add chunking, ingestion, retrieval, and chat services (task 6).
+- `d3fe19c` feat: add FastAPI API layer with app wiring and integration tests (tasks 7–8).
+- `78a8eb7` docs: README quickstart, sample document, E2E smoke script (task 9).
+- `(fix)` hermetic health integration test: probe points at a dead endpoint so the suite passes even with a local Ollama daemon running.
+
+### Live verification (task 9, real stack)
+
+- Qdrant via Docker (compose up), Ollama daemon started locally (`ollama serve`).
+- Smoke `uv run python scripts/smoke_e2e.py` → health ok; ingest `examples/mikrotik.md` 201 (5 chunks); chat grounded answer: VLAN 10/30/50, interface creation, firewall isolation — 5 sources (scores 0.60–0.78), latency 60.8s (gemma4:26b), §33 line logged.
+- Provider swap: `LLM_PROVIDER=payperq` starts the app and serves `/health` 200 without domain changes (live chat pending the user's PayPerQ key; OpenCode Go live validation pending endpoint publication).
 - Design note (worker): `SearchHit` lacks `chunk_index`, so ingestion mirrors it inside the point metadata payload; chat reads it from there.
