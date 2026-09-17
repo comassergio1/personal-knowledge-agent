@@ -1,0 +1,8 @@
+"""Domain models. Importing this package registers every table on
+`Base.metadata` (required before Alembic autogenerate and create_all).
+"""
+
+from app.domain.models.base import Base
+from app.domain.models.document import Chunk, Document
+
+__all__ = ["Base", "Chunk", "Document"]
