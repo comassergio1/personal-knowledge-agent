@@ -1,16 +1,17 @@
 """Ollama LLM adapter: chat completions against a local server.
 
 Talks to ``POST /api/chat`` with ``"stream": false`` and returns the assistant
-``message.content``. The httpx base URL is the only constructor value that is
-not read straight from ``Settings``; the factory passes
-``settings.ollama_base_url``.
+``message.content`` plus token usage from ``prompt_eval_count``/``eval_count``
+when the server reports them (spec §30). The httpx base URL is the only
+constructor value that is not read straight from ``Settings``; the factory
+passes ``settings.ollama_base_url``.
 """
 
 from __future__ import annotations
 
 import httpx
 
-from app.providers.llm.base import ChatMessage, LLMProvider, LLMProviderError
+from app.providers.llm.base import ChatMessage, LLMProvider, LLMProviderError, LLMResult
 
 
 class OllamaProvider(LLMProvider):
@@ -27,9 +28,10 @@ class OllamaProvider(LLMProvider):
 
     async def generate(
         self, messages: list[ChatMessage], *, model: str | None = None, **kwargs
-    ) -> str:
+    ) -> LLMResult:
+        effective_model = model or self._model
         payload = {
-            "model": model or self._model,
+            "model": effective_model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "stream": False,
         }
@@ -45,7 +47,13 @@ class OllamaProvider(LLMProvider):
         message = data.get("message") if isinstance(data, dict) else None
         if not message or not message.get("content"):
             raise LLMProviderError("Ollama response missing message.content")
-        return message["content"]
+        return LLMResult(
+            content=message["content"],
+            prompt_tokens=data.get("prompt_eval_count"),
+            completion_tokens=data.get("eval_count"),
+            provider="ollama",
+            model=effective_model,
+        )
 
     async def close(self) -> None:
         """Close the underlying httpx client."""

@@ -60,7 +60,8 @@ class ChatService:
             ChatMessage(role="system", content=_SYSTEM_PROMPT),
             ChatMessage(role="user", content=user_content),
         ]
-        answer = await self._llm.generate(messages=messages, model=None)
+        result = await self._llm.generate(messages=messages, model=None)
+        answer = result.content
 
         sources = [
             SourceRef(

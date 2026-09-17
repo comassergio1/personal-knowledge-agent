@@ -38,11 +38,13 @@ async def test_generate_returns_assistant_content(monkeypatch) -> None:
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
 
     provider = _provider()
-    content = await provider.generate(
+    result = await provider.generate(
         [ChatMessage(role="user", content="hi")], model="llama3.1:latest"
     )
 
-    assert content == "hola"
+    assert result.content == "hola"
+    assert result.provider == "ollama"
+    assert result.model == "llama3.1:latest"
     assert captured["url"] == "/api/chat"
     assert captured["json"] == {
         "model": "llama3.1:latest",
@@ -61,9 +63,42 @@ async def test_generate_uses_default_model(monkeypatch) -> None:
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
 
     provider = _provider()
-    await provider.generate([ChatMessage(role="user", content="hi")])
+    result = await provider.generate([ChatMessage(role="user", content="hi")])
 
     assert captured["model"] == "gemma4:26b"
+    assert result.model == "gemma4:26b"
+
+
+async def test_generate_parses_token_counts(monkeypatch) -> None:
+    async def fake_post(self, url: str, **kwargs):
+        return FakeResponse(
+            {
+                "message": {"role": "assistant", "content": "four words"},
+                "prompt_eval_count": 42,
+                "eval_count": 7,
+            }
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    provider = _provider()
+    result = await provider.generate([ChatMessage(role="user", content="hi")])
+
+    assert result.prompt_tokens == 42
+    assert result.completion_tokens == 7
+
+
+async def test_generate_missing_counts_yield_none(monkeypatch) -> None:
+    async def fake_post(self, url: str, **kwargs):
+        return FakeResponse({"message": {"content": "ok"}})
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    provider = _provider()
+    result = await provider.generate([ChatMessage(role="user", content="hi")])
+
+    assert result.prompt_tokens is None
+    assert result.completion_tokens is None
 
 
 async def test_generate_wraps_transport_errors(monkeypatch) -> None:

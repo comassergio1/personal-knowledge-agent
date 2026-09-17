@@ -3,14 +3,15 @@
 The OpenAI client is created lazily on the first ``generate`` call so that
 constructing the provider (for example during an ``LLM_PROVIDER`` swap) never
 fails because the API key is not set yet; missing credentials surface as a
-clear ``LLMProviderError`` at call time.
+clear ``LLMProviderError`` at call time. Token usage is parsed from
+``completion.usage`` when the endpoint reports it (spec §30).
 """
 
 from __future__ import annotations
 
 from openai import AsyncOpenAI, OpenAIError
 
-from app.providers.llm.base import ChatMessage, LLMProvider, LLMProviderError
+from app.providers.llm.base import ChatMessage, LLMProvider, LLMProviderError, LLMResult
 
 
 class PayPerQProvider(LLMProvider):
@@ -41,10 +42,11 @@ class PayPerQProvider(LLMProvider):
 
     async def generate(
         self, messages: list[ChatMessage], *, model: str | None = None, **kwargs
-    ) -> str:
+    ) -> LLMResult:
+        effective_model = model or self._model
         try:
             completion = await self._get_client().chat.completions.create(
-                model=model or self._model,
+                model=effective_model,
                 messages=[{"role": m.role, "content": m.content} for m in messages],
             )
         except OpenAIError as exc:
@@ -53,7 +55,15 @@ class PayPerQProvider(LLMProvider):
         content = completion.choices[0].message.content
         if content is None:
             raise LLMProviderError("PayPerQ returned an empty completion")
-        return content
+
+        usage = completion.usage
+        return LLMResult(
+            content=content,
+            prompt_tokens=usage.prompt_tokens if usage is not None else None,
+            completion_tokens=usage.completion_tokens if usage is not None else None,
+            provider="payperq",
+            model=effective_model,
+        )
 
     async def close(self) -> None:
         """Close the OpenAI client when it was created (lazy init)."""

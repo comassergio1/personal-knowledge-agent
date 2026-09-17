@@ -32,7 +32,7 @@ from app.core.logging import get_logger, setup_logging
 from app.domain.models import Base
 from app.providers.embeddings.base import EmbeddingProvider
 from app.providers.embeddings.factory import EmbeddingProviderFactory
-from app.providers.llm.base import LLMProvider
+from app.providers.llm.base import LLMProvider, LLMResult
 from app.providers.llm.factory import LLMProviderFactory
 from app.repositories.document_repository import DocumentRepository
 from app.services.chat_service import ChatService
@@ -60,8 +60,14 @@ class _FakeLLM(LLMProvider):
 
     async def generate(
         self, messages: list, *, model: str | None = None, **kwargs
-    ) -> str:
-        return "This is a fake grounded answer."
+    ) -> LLMResult:
+        return LLMResult(
+            content="This is a fake grounded answer.",
+            prompt_tokens=0,
+            completion_tokens=0,
+            provider="fake-llm",
+            model="fake",
+        )
 
     async def close(self) -> None:
         return None

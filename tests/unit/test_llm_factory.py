@@ -28,9 +28,11 @@ def test_create_payperq() -> None:
 
 def test_create_opencode_go() -> None:
     provider = LLMProviderFactory.create(
-        "opencode_go", _settings(opencode_go_base_url="http://localhost:9999")
+        "opencode_go", _settings(opencode_go_api_key="k")
     )
     assert isinstance(provider, OpenCodeGoProvider)
+    assert provider._base_url == "https://opencode.ai/zen/go/v1"
+    assert provider._model == "glm-5.3"
 
 
 def test_create_normalizes_case_and_whitespace() -> None:
@@ -43,6 +45,6 @@ def test_create_unknown_provider_lists_valid_choices() -> None:
         LLMProviderFactory.create("bogus", _settings())
 
 
-def test_create_opencode_go_without_base_url_raises_clear_error() -> None:
-    with pytest.raises(LLMProviderError, match="config-only"):
+def test_create_opencode_go_without_api_key_raises_clear_error() -> None:
+    with pytest.raises(LLMProviderError, match="OPENCODE_GO_API_KEY"):
         LLMProviderFactory.create("opencode_go", _settings())

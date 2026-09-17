@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from app.core.config import Settings
+from app.providers.llm.base import LLMResult
 from app.schemas.chat import ChatResult, SourceRef
 from app.services.chat_service import _SYSTEM_PROMPT, ChatService
 from app.vector.collections import CHUNK_INDEX_FIELD
@@ -20,10 +21,16 @@ class FakeLLM:
         self.messages: list | None = None
         self.requested_model: str | None = "sentinel"
 
-    async def generate(self, messages, *, model: str | None = None, **kwargs) -> str:
+    async def generate(self, messages, *, model: str | None = None, **kwargs) -> LLMResult:
         self.messages = list(messages)
         self.requested_model = model
-        return "A grounded answer."
+        return LLMResult(
+            content="A grounded answer.",
+            prompt_tokens=None,
+            completion_tokens=None,
+            provider="fake-llm",
+            model="test-model",
+        )
 
 
 class FakeRetrieval:

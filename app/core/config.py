@@ -33,10 +33,20 @@ class Settings(BaseSettings):
     payperq_base_url: str = "https://api.ppq.ai/v1"
     payperq_api_key: str = ""
 
-    # Opencode Go (configurable OpenAI-compatible adapter)
-    opencode_go_base_url: str = ""
+    # OpenCode Go (OpenAI-compatible endpoint; flat $10/mo subscription)
+    opencode_go_base_url: str = "https://opencode.ai/zen/go/v1"
     opencode_go_api_key: str = ""
-    opencode_go_model: str = ""
+    opencode_go_model: str = "glm-5.3"
+
+    # Cost rates in USD per 1k tokens (input/output) for §30 token accounting.
+    # Ollama is local/free and OpenCode Go is a flat $10/mo subscription, so
+    # their rates stay 0; PayPerQ rates are set by the user to real billing.
+    ollama_usd_per_1k_in: float = 0.0
+    ollama_usd_per_1k_out: float = 0.0
+    payperq_usd_per_1k_in: float = 0.0
+    payperq_usd_per_1k_out: float = 0.0
+    opencode_go_usd_per_1k_in: float = 0.0
+    opencode_go_usd_per_1k_out: float = 0.0
 
     # Embedding provider and model
     embedding_provider: str = "ollama"
