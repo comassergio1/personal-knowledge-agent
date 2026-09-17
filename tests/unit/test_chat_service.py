@@ -60,9 +60,21 @@ class FakeRetrieval:
         self.calls: list[dict] = []
 
     async def retrieve(
-        self, query: str, *, top_k: int = 5, document_id: str | None = None
+        self,
+        query: str,
+        *,
+        top_k: int = 5,
+        document_id: str | None = None,
+        project_id: str | None = None,
     ) -> list[SearchHit]:
-        self.calls.append({"query": query, "top_k": top_k, "document_id": document_id})
+        self.calls.append(
+            {
+                "query": query,
+                "top_k": top_k,
+                "document_id": document_id,
+                "project_id": project_id,
+            }
+        )
         return self.hits
 
 
@@ -96,7 +108,9 @@ async def test_chat_builds_grounded_prompt_and_returns_answer_with_sources() -> 
 
     result: ChatResult = await service.chat("what is the answer?", top_k=2)
 
-    assert retrieval.calls == [{"query": "what is the answer?", "top_k": 2, "document_id": None}]
+    assert retrieval.calls == [
+        {"query": "what is the answer?", "top_k": 2, "document_id": None, "project_id": None}
+    ]
     assert llm.requested_model is None
     assert llm.messages is not None
     assert len(llm.messages) == 2
@@ -131,7 +145,14 @@ async def test_chat_without_hits_omits_knowledge_and_returns_empty_sources() -> 
         "anything at all?", top_k=5, document_id="doc-x"
     )
 
-    assert retrieval.calls == [{"query": "anything at all?", "top_k": 5, "document_id": "doc-x"}]
+    assert retrieval.calls == [
+        {
+            "query": "anything at all?",
+            "top_k": 5,
+            "document_id": "doc-x",
+            "project_id": None,
+        }
+    ]
     assert llm.messages is not None
     assert len(llm.messages) == 2
     system, user = llm.messages
@@ -140,6 +161,21 @@ async def test_chat_without_hits_omits_knowledge_and_returns_empty_sources() -> 
     assert "USER REQUEST\nanything at all?" in user.content
     assert result.answer == "A grounded answer."
     assert result.sources == []
+
+
+async def test_chat_passes_project_id_to_retrieval() -> None:
+    service, _, retrieval = _service(hits=[])
+
+    await service.chat("only my project", project_id="proj-7")
+
+    assert retrieval.calls == [
+        {
+            "query": "only my project",
+            "top_k": 5,
+            "document_id": None,
+            "project_id": "proj-7",
+        }
+    ]
 
 
 async def test_chat_emits_structured_observability_log_line(caplog) -> None:

@@ -6,6 +6,7 @@ DEFAULT_COLLECTION = "knowledge"
 
 # Payload field names stored on every chunk point.
 DOCUMENT_ID_FIELD = "document_id"
+PROJECT_ID_FIELD = "project_id"
 CHUNK_ID_FIELD = "chunk_id"
 CHUNK_INDEX_FIELD = "chunk_index"
 TITLE_FIELD = "title"

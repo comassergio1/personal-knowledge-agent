@@ -70,6 +70,25 @@ async def test_list_returns_all_documents(db_session) -> None:
     assert all(len(d.chunks) == 2 for d in docs)
 
 
+async def test_list_filters_by_project(db_session) -> None:
+    repo = DocumentRepository(db_session)
+    await _create_doc(repo, title="In project")
+    await repo.create(
+        title="Other",
+        content="body",
+        mime_type="text/markdown",
+        project_id="proj-2",
+    )
+
+    in_project = await repo.list(project_id="proj-1")
+    other = await repo.list(project_id="proj-2")
+
+    assert [d.title for d in in_project] == ["In project"]
+    assert [d.title for d in other] == ["Other"]
+    # An unknown project yields an empty list, never an error.
+    assert await repo.list(project_id="missing") == []
+
+
 async def test_delete_removes_document_and_its_chunks(db_session) -> None:
     repo = DocumentRepository(db_session)
     doc = await _create_doc(repo)

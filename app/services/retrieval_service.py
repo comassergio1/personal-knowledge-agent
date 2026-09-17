@@ -25,6 +25,7 @@ class RetrievalService:
         *,
         top_k: int = 5,
         document_id: str | None = None,
+        project_id: str | None = None,
         score_threshold: float | None = None,
     ) -> list[SearchHit]:
         """Return the nearest chunks for ``query``, optionally scoped."""
@@ -33,5 +34,6 @@ class RetrievalService:
             embedding,
             top_k=top_k,
             document_id=document_id,
+            project_id=project_id,
             score_threshold=score_threshold,
         )

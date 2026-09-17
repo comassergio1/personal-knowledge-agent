@@ -56,6 +56,28 @@ def test_list_includes_uploaded_document(test_app: TestClient) -> None:
     assert body["items"][0]["title"] == "note"
 
 
+def test_list_filters_by_project(test_app: TestClient) -> None:
+    first = test_app.post(
+        "/api/v1/documents",
+        files={"file": ("a.md", b"# A\n\nContent A.", "text/markdown")},
+        data={"project_id": "proj-1"},
+    ).json()
+    test_app.post(
+        "/api/v1/documents",
+        files={"file": ("b.md", b"# B\n\nContent B.", "text/markdown")},
+        data={"project_id": "proj-2"},
+    )
+
+    assert test_app.get("/api/v1/documents").json()["total"] == 2
+
+    filtered = test_app.get("/api/v1/documents?project_id=proj-1").json()
+    assert filtered["total"] == 1
+    assert filtered["items"][0]["id"] == first["id"]
+
+    empty = test_app.get("/api/v1/documents?project_id=missing").json()
+    assert empty["total"] == 0
+
+
 def test_delete_removes_rows_and_vector_points(test_app: TestClient) -> None:
     document_id = test_app.post(
         "/api/v1/documents",

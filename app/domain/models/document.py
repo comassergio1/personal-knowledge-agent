@@ -31,6 +31,14 @@ class Document(Base):
     source_type: Mapped[str] = mapped_column(String(64), default="text")
     source_uri: Mapped[str | None] = mapped_column(Text, nullable=True)
     project_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    # Vault-relative POSIX path of the source-of-truth markdown file (None
+    # when the document was ingested without a file, e.g. pasted text).
+    file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Modification time of the vault file at the last sync; a newer mtime on
+    # disk marks the row stale (the file is the source of truth).
+    file_mtime: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )

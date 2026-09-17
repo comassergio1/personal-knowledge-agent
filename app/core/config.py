@@ -8,6 +8,7 @@ runtime environment.
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -60,6 +61,11 @@ class Settings(BaseSettings):
     # Document chunking defaults for ingestion (see app.services.chunking).
     chunk_size: int = 1000
     chunk_overlap: int = 120
+
+    # Obsidian-compatible knowledge vault: markdown files on disk are the
+    # source of truth; the directory is gitignored (see .gitignore `data/`).
+    # Path is relative to the process working directory (the repo root).
+    vault_path: Path = Path("./data/vault")
 
 
 @lru_cache

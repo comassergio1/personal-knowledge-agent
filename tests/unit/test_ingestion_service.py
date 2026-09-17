@@ -14,6 +14,7 @@ from app.vector.collections import (
     CONTENT_FIELD,
     DOCUMENT_ID_FIELD,
     METADATA_FIELD,
+    PROJECT_ID_FIELD,
     TITLE_FIELD,
 )
 from app.vector.qdrant import VectorPoint
@@ -113,6 +114,28 @@ async def test_ingest_persists_document_metadata(db_session) -> None:
     assert document.source_type == "file"
     assert document.source_uri == "file:///tmp/note.txt"
     assert document.project_id == "proj-9"
+
+
+async def test_ingest_mirrors_project_id_in_vector_payload(db_session) -> None:
+    service, store, _ = _service(db_session)
+
+    await service.ingest(
+        title="Note", content="Project-scoped content.", project_id="proj-42"
+    )
+
+    point = store.upserted[0]
+    assert point.payload[PROJECT_ID_FIELD] == "proj-42"
+    assert point.payload[METADATA_FIELD][PROJECT_ID_FIELD] == "proj-42"
+
+
+async def test_ingest_payload_project_id_is_none_without_project(db_session) -> None:
+    service, store, _ = _service(db_session)
+
+    await service.ingest(title="Note", content="Ungrouped content.")
+
+    point = store.upserted[0]
+    assert point.payload[PROJECT_ID_FIELD] is None
+    assert point.payload[METADATA_FIELD][PROJECT_ID_FIELD] is None
 
 
 async def test_ingest_defaults_chunking_from_settings(db_session) -> None:

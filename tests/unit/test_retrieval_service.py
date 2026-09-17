@@ -30,6 +30,7 @@ class FakeVectorStore:
         *,
         top_k: int = 5,
         document_id: str | None = None,
+        project_id: str | None = None,
         score_threshold: float | None = None,
     ) -> list[SearchHit]:
         self.calls.append(
@@ -37,6 +38,7 @@ class FakeVectorStore:
                 "embedding": embedding,
                 "top_k": top_k,
                 "document_id": document_id,
+                "project_id": project_id,
                 "score_threshold": score_threshold,
             }
         )
@@ -69,10 +71,21 @@ async def test_retrieve_embeds_query_and_passes_options_through() -> None:
             "embedding": [1.0, 2.0, 3.0],
             "top_k": 3,
             "document_id": "doc-9",
+            "project_id": None,
             "score_threshold": 0.5,
         }
     ]
     assert hits == store.hits
+
+
+async def test_retrieve_passes_project_id_through() -> None:
+    embedding = FakeEmbeddingProvider()
+    store = FakeVectorStore(hits=[_hit()])
+    service = RetrievalService(store, embedding)  # type: ignore[arg-type]
+
+    await service.retrieve("when?", project_id="proj-7")
+
+    assert store.calls[0]["project_id"] == "proj-7"
 
 
 async def test_retrieve_uses_defaults_when_options_omitted() -> None:
@@ -84,6 +97,7 @@ async def test_retrieve_uses_defaults_when_options_omitted() -> None:
 
     assert store.calls[0]["top_k"] == 5
     assert store.calls[0]["document_id"] is None
+    assert store.calls[0]["project_id"] is None
     assert store.calls[0]["score_threshold"] is None
 
 

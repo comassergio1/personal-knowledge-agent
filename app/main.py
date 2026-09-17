@@ -27,6 +27,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.routes.chat import router as chat_router
 from app.api.routes.documents import router as documents_router
 from app.api.routes.health import router as health_router
+from app.api.routes.projects import router as projects_router
 from app.api.routes.usage import router as usage_router
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger, setup_logging
@@ -41,11 +42,13 @@ from app.repositories.usage_repository import UsageRepository
 from app.services.chat_service import ChatService
 from app.services.ingestion_service import IngestionService
 from app.services.retrieval_service import RetrievalService
+from app.services.vault_service import VaultService
 from app.vector.collections import (
     CHUNK_ID_FIELD,
     CONTENT_FIELD,
     DOCUMENT_ID_FIELD,
     METADATA_FIELD,
+    PROJECT_ID_FIELD,
     TITLE_FIELD,
 )
 from app.vector.qdrant import QdrantVectorStore, SearchHit, VectorPoint
@@ -111,12 +114,15 @@ class _FakeVectorStore:
         *,
         top_k: int = 5,
         document_id: str | None = None,
+        project_id: str | None = None,
         score_threshold: float | None = None,
     ) -> list[SearchHit]:
         hits: list[SearchHit] = []
         for point in self._points:
             payload = point.payload
             if document_id is not None and payload[DOCUMENT_ID_FIELD] != document_id:
+                continue
+            if project_id is not None and payload[PROJECT_ID_FIELD] != project_id:
                 continue
             hits.append(
                 SearchHit(
@@ -195,6 +201,7 @@ def _make_lifespan(
 
         # The repository is bound to its own session for the app lifetime;
         # request-scoped sessions (``get_db``) cover route-level queries.
+        vault_service = VaultService(settings.vault_path)
         ingestion_session = session_factory()
         document_repository = DocumentRepository(ingestion_session)
         usage_session = session_factory()
@@ -209,6 +216,7 @@ def _make_lifespan(
         app.state.embeddings = embeddings
         app.state.llm = llm
         app.state.document_repository = document_repository
+        app.state.vault_service = vault_service
         app.state.ingestion_service = IngestionService(
             document_repository, vector_store, embeddings
         )
@@ -252,5 +260,6 @@ def create_app(settings: Settings | None = None, *, testing: bool = False) -> Fa
     app.include_router(chat_router, prefix="/api/v1")
     app.include_router(documents_router, prefix="/api/v1")
     app.include_router(health_router, prefix="/api/v1")
+    app.include_router(projects_router, prefix="/api/v1")
     app.include_router(usage_router, prefix="/api/v1")
     return app

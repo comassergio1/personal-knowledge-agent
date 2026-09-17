@@ -27,6 +27,7 @@ from app.vector.collections import (
     DEFAULT_COLLECTION,
     DOCUMENT_ID_FIELD,
     METADATA_FIELD,
+    PROJECT_ID_FIELD,
     TITLE_FIELD,
 )
 
@@ -60,7 +61,7 @@ class QdrantVectorStore:
         self._client = client if client is not None else AsyncQdrantClient(url=url)
 
     async def ensure_collection(self, size: int) -> None:
-        """Create the collection if missing, with a keyword index on document_id."""
+        """Create the collection if missing, with keyword indexes on common filter fields."""
         if await self._client.collection_exists(DEFAULT_COLLECTION):
             return
         # on_disk=True suits a home server: vectors live on disk, not RAM.
@@ -72,6 +73,11 @@ class QdrantVectorStore:
         await self._client.create_payload_index(
             collection_name=DEFAULT_COLLECTION,
             field_name=DOCUMENT_ID_FIELD,
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
+        await self._client.create_payload_index(
+            collection_name=DEFAULT_COLLECTION,
+            field_name=PROJECT_ID_FIELD,
             field_schema=PayloadSchemaType.KEYWORD,
         )
 
@@ -91,18 +97,20 @@ class QdrantVectorStore:
         *,
         top_k: int = 5,
         document_id: str | None = None,
+        project_id: str | None = None,
         score_threshold: float | None = None,
     ) -> list[SearchHit]:
-        """Return the top-k nearest chunks, optionally scoped to one document."""
-        query_filter = (
-            Filter(
-                must=[
-                    FieldCondition(key=DOCUMENT_ID_FIELD, match=MatchValue(value=document_id))
-                ]
+        """Return the top-k nearest chunks, scoped by document and/or project."""
+        conditions: list[FieldCondition] = []
+        if document_id is not None:
+            conditions.append(
+                FieldCondition(key=DOCUMENT_ID_FIELD, match=MatchValue(value=document_id))
             )
-            if document_id is not None
-            else None
-        )
+        if project_id is not None:
+            conditions.append(
+                FieldCondition(key=PROJECT_ID_FIELD, match=MatchValue(value=project_id))
+            )
+        query_filter = Filter(must=conditions) if conditions else None
         response = await self._client.query_points(
             collection_name=DEFAULT_COLLECTION,
             query=embedding,

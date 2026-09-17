@@ -18,6 +18,7 @@ from app.vector.collections import (
     CONTENT_FIELD,
     DOCUMENT_ID_FIELD,
     METADATA_FIELD,
+    PROJECT_ID_FIELD,
     TITLE_FIELD,
 )
 from app.vector.qdrant import QdrantVectorStore, VectorPoint
@@ -94,9 +95,11 @@ class IngestionService:
                     CHUNK_INDEX_FIELD: chunk.chunk_index,
                     TITLE_FIELD: document.title,
                     CONTENT_FIELD: chunk.content,
+                    PROJECT_ID_FIELD: document.project_id,
                     METADATA_FIELD: {
                         **dict(chunk.metadata_ or {}),
                         CHUNK_INDEX_FIELD: chunk.chunk_index,
+                        PROJECT_ID_FIELD: document.project_id,
                     },
                 },
             )

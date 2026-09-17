@@ -74,13 +74,18 @@ class ChatService:
         self._logger = get_logger("chat_service")
 
     async def chat(
-        self, message: str, *, top_k: int = 5, document_id: str | None = None
+        self,
+        message: str,
+        *,
+        top_k: int = 5,
+        document_id: str | None = None,
+        project_id: str | None = None,
     ) -> ChatResult:
         """Return a grounded answer plus the sources it used."""
         started = time.perf_counter()
         request_id = uuid.uuid4().hex
         hits = await self._retrieval.retrieve(
-            message, top_k=top_k, document_id=document_id
+            message, top_k=top_k, document_id=document_id, project_id=project_id
         )
 
         if hits:

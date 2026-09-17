@@ -58,13 +58,19 @@ class DocumentRepository:
         )
         return await self._session.scalar(stmt)
 
-    async def list(self) -> Sequence[Document]:
-        """Return all documents (chunks loaded), newest first."""
+    async def list(self, project_id: str | None = None) -> Sequence[Document]:
+        """Return documents (chunks loaded), newest first, optionally scoped.
+
+        ``project_id`` filters the rows to one project; the default (None)
+        keeps the historical behavior of listing every document.
+        """
         stmt = (
             select(Document)
             .options(selectinload(Document.chunks))
             .order_by(Document.created_at.desc())
         )
+        if project_id is not None:
+            stmt = stmt.where(Document.project_id == project_id)
         return (await self._session.scalars(stmt)).all()
 
     async def delete(self, document_id: str) -> bool:

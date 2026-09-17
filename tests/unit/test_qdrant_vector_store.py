@@ -20,7 +20,11 @@ from qdrant_client.http.models import (
 )
 
 from app.vector import qdrant as qdrant_module
-from app.vector.collections import DEFAULT_COLLECTION, DOCUMENT_ID_FIELD
+from app.vector.collections import (
+    DEFAULT_COLLECTION,
+    DOCUMENT_ID_FIELD,
+    PROJECT_ID_FIELD,
+)
 from app.vector.qdrant import QdrantVectorStore, SearchHit, VectorPoint
 
 _PAYLOAD = {
@@ -155,6 +159,35 @@ async def test_search_filters_by_document_id_and_threshold() -> None:
         FieldCondition(key=DOCUMENT_ID_FIELD, match=MatchValue(value="doc-9"))
     ]
     assert call[2]["score_threshold"] == 0.5
+
+
+async def test_search_filters_by_project_id() -> None:
+    fake = FakeQdrantClient()
+    store = QdrantVectorStore(url="http://localhost:6333", client=fake)
+
+    await store.search([0.1], project_id="proj-3")
+
+    call = next(c for c in fake.calls if c[0] == "query_points")
+    query_filter = call[2]["query_filter"]
+    assert isinstance(query_filter, Filter)
+    assert query_filter.must == [
+        FieldCondition(key=PROJECT_ID_FIELD, match=MatchValue(value="proj-3"))
+    ]
+
+
+async def test_search_combines_document_and_project_conditions() -> None:
+    fake = FakeQdrantClient()
+    store = QdrantVectorStore(url="http://localhost:6333", client=fake)
+
+    await store.search([0.1], document_id="doc-9", project_id="proj-3")
+
+    call = next(c for c in fake.calls if c[0] == "query_points")
+    query_filter = call[2]["query_filter"]
+    assert isinstance(query_filter, Filter)
+    assert query_filter.must == [
+        FieldCondition(key=DOCUMENT_ID_FIELD, match=MatchValue(value="doc-9")),
+        FieldCondition(key=PROJECT_ID_FIELD, match=MatchValue(value="proj-3")),
+    ]
 
 
 async def test_delete_by_document_uses_payload_filter() -> None:

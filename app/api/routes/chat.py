@@ -20,6 +20,9 @@ async def chat(
 ) -> ChatResponse:
     """Answer ``message`` using retrieved knowledge and the LLM gateway."""
     result = await chat_service.chat(
-        request.message, top_k=request.top_k, document_id=request.document_id
+        request.message,
+        top_k=request.top_k,
+        document_id=request.document_id,
+        project_id=request.project_id,
     )
     return ChatResponse(answer=result.answer, sources=result.sources)

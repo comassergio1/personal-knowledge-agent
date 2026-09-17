@@ -18,6 +18,7 @@ from app.repositories.usage_repository import UsageRepository
 from app.services.chat_service import ChatService
 from app.services.ingestion_service import IngestionService
 from app.services.retrieval_service import RetrievalService
+from app.services.vault_service import VaultService
 from app.vector.qdrant import QdrantVectorStore
 
 
@@ -66,3 +67,8 @@ def get_llm(request: Request) -> LLMProvider:
 def get_usage_repository(request: Request) -> UsageRepository:
     """Return the app-scoped usage repository from ``app.state``."""
     return request.app.state.usage_repository
+
+
+def get_vault_service(request: Request) -> VaultService:
+    """Return the shared vault service from ``app.state``."""
+    return request.app.state.vault_service

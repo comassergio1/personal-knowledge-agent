@@ -66,9 +66,10 @@ async def create_document(
 @router.get("", response_model=DocumentList)
 async def list_documents(
     session: Annotated[AsyncSession, Depends(get_db)],
+    project_id: str | None = None,
 ) -> DocumentList:
-    """Return all documents, newest first."""
-    documents = await DocumentRepository(session).list()
+    """Return documents, newest first, optionally scoped to one project."""
+    documents = await DocumentRepository(session).list(project_id=project_id)
     return DocumentList(items=[_to_read(d) for d in documents], total=len(documents))
 
 
