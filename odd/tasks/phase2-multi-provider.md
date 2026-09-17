@@ -3,7 +3,7 @@
 **Project**: Personal Knowledge Agent (PKA).
 **Spec source**: `Personal Knowledge Agent.md`, sections 3, 4, 5, 27, 28, 30, 41.
 **Branch policy**: commits on `main` (no fallback feature: manual swap only, user decision 2026-09-17).
-**Status**: in_progress
+**Status**: done — multi-provider live-validated (2026-09-18)
 
 ## Scope (Phase 2)
 
@@ -41,7 +41,7 @@
 | 4 | `llm_usage` table + migration + repository | done | dacac40 |
 | 5 | ChatService cost recording + `GET /api/v1/usage` (recent + totals) | done | dacac40 |
 | 6 | Tests: usage parse paths, Go defaults/headers, usage service + endpoint | done | dacac40 |
-| 7 | Live validation: OpenCode Go chat (real key), PayPerQ chat (user `.env` key); README update | in_progress | |
+| 7 | Live validation: OpenCode Go chat (real key), PayPerQ chat (user `.env` key); README update | done | fdc76e9 + docs |
 
 ## Acceptance criteria
 
@@ -54,3 +54,11 @@
 
 - `6038a97` feat: usage-aware LLM contract and live-ready OpenCode Go provider (tasks 1–3).
 - `dacac40` feat: record LLM usage and cost, expose /api/v1/usage (tasks 4–6).
+- `fdc76e9` fix: commit embedding_id writes, releasing the SQLite write lock (found live; tasks 4–7).
+
+### Live validation (task 7, real providers)
+
+- **OpenCode Go** (`glm-5.3`): smoke via API with the subscription key from `~/.local/share/opencode/auth.json` (transient, never printed) → ingest 201, chat 200 grounded (WAN ether8, VLAN 10/30/50, interfaces, firewall), 5 sources; usage row 415/1428 tokens, 19.2s.
+- **PayPerQ** (`deepseek/deepseek-v4.1-flash`, user key in `.env`): chat 200 grounded, 5 sources; usage row 444/891 tokens, 12.1s. Catalog: 368 models, `GET https://api.ppq.ai/v1/models`.
+- `GET /api/v1/usage` verified: per-provider breakdown + totals (859 in / 2319 out tokens, cost $0 as rates default to 0).
+- **Bug found live**: ingest left an uncommitted write transaction on the shared session → SQLite `database is locked` on the usage insert; fixed via `DocumentRepository.update_chunk_embedding_ids` + WAL/busy_timeout pragmas + file-DB regression tests.

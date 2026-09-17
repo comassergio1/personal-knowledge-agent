@@ -9,8 +9,12 @@ The application owns Conversations, Documents, Knowledge, Memories, Embeddings,
 Research, Projects, and Evals. LLM providers (Ollama, PayPerQ, OpenCode Go) only
 provide inference — switching providers never loses or touches your data.
 
-**Current status: vertical slice (Fase 1).** Documents → embeddings → Qdrant →
-retrieval → grounded chat via the LLM Gateway. Memory extraction, research,
+**Current status: Fase 2 — multi-provider, live-validated.**
+
+Documents → embeddings → Qdrant → retrieval → grounded chat via the LLM
+Gateway, with **Ollama (local)**, **PayPerQ** (`deepseek/deepseek-v4.1-flash`)
+and **OpenCode Go** (`glm-5.3`) all validated against the real providers, and
+per-request token/cost accounting (§30). Memory extraction, research,
 tutorials, evals, and the coding-agent integration are later phases.
 
 ## Architecture
@@ -77,6 +81,7 @@ VLANs en mi MikroTik?", and prints the grounded answer with its sources.
 | GET | `/documents` | List documents |
 | DELETE | `/documents/{id}` | Delete document (rows + vector points) |
 | POST | `/chat` | `{"message": "...", "top_k": 5, "document_id": "..."}` → grounded answer + sources |
+| GET | `/usage` | Recent per-request LLM usage, totals, and per-provider breakdown (§30) |
 | GET | `/health` | App status + Qdrant/Ollama reachability (never 5xx) |
 
 Example:
@@ -99,19 +104,39 @@ Every provider swap happens in `.env` — domain code does not change (spec §5)
 LLM_PROVIDER=ollama
 LLM_MODEL=gemma4:26b
 
-# PayPerQ (OpenAI-compatible)
+# PayPerQ (OpenAI-compatible, https://api.ppq.ai/v1)
 LLM_PROVIDER=payperq
 PAYPERQ_API_KEY=...
+LLM_MODEL=deepseek/deepseek-v4.1-flash   # any id from GET /v1/models
 
-# OpenCode Go (config-only adapter: the endpoint is not published yet;
-# set OPENCODE_GO_BASE_URL when available; otherwise the provider raises a
-# clear configuration error)
+# OpenCode Go (OpenAI-compatible, https://opencode.ai/zen/go/v1)
 LLM_PROVIDER=opencode_go
-OPENCODE_GO_BASE_URL=...
-OPENCODE_GO_API_KEY=...
+OPENCODE_GO_API_KEY=...                  # OpenCode Go subscription key
+OPENCODE_GO_BASE_URL=https://opencode.ai/zen/go/v1   # default when empty
+OPENCODE_GO_MODEL=glm-5.3                # default when empty
 ```
 
-A fallback provider chain (primary → fallback) is a planned enhancement (spec §29).
+OpenCode Go notes: the adapter sends a stable `x-opencode-session` header and
+the `personal-knowledge-agent/0.1.0` User-Agent (per the provider docs);
+`gpt-5.6-luna`/`grok-4.6` use the Responses API and are out of scope. All three
+providers were validated live (Fase 2). A fallback provider chain (primary →
+fallback, spec §29) is a planned enhancement.
+
+## Cost control (spec §30)
+
+Every LLM request is recorded in the `llm_usage` table (provider, model,
+input/output tokens, estimated cost, latency) and visible at
+`GET /api/v1/usage` (recent rows + totals + per-provider breakdown). The
+estimated cost uses per-provider USD-per-1k rates from `.env`:
+
+```bash
+PAYPERQ_USD_PER_1K_IN=0.0        # set your real PayPerQ rates
+PAYPERQ_USD_PER_1K_OUT=0.0
+OPENCODE_GO_USD_PER_1K_IN=0.0    # flat $10/mo subscription
+OPENCODE_GO_USD_PER_1K_OUT=0.0
+OLLAMA_USD_PER_1K_IN=0.0         # local, free
+OLLAMA_USD_PER_1K_OUT=0.0
+```
 
 ## Security
 
@@ -132,23 +157,23 @@ uv run ruff check app tests
 
 ```
 app/
-  api/routes/      chat · documents · health
+  api/routes/      chat · documents · health · usage
   core/            config (pydantic-settings) · logging
-  domain/models/   Document · Chunk (SQLAlchemy 2.0)
+  domain/models/   Document · Chunk · LLMUsage (SQLAlchemy 2.0)
   providers/       llm/ (base · ollama · payperq · opencode_go · factory)
                    embeddings/ (base · ollama · factory)
-  repositories/    document_repository
-  schemas/         document · chat
+  repositories/    document_repository · usage_repository
+  schemas/         document · chat · usage
   services/        chunking · ingestion · retrieval · chat
   vector/          qdrant store · collections constants
 examples/          sample knowledge document
 scripts/           smoke_e2e.py
-odd/tasks/         feature tracking (vertical-slice)
+odd/tasks/         feature tracking (vertical-slice, phase2-multi-provider)
 ```
 
 ## Roadmap
 
-Vertical slice (this repo) → multi-provider live validation → knowledge
-ingestion formats (PDF/HTML) → memory extraction/approval → tutorial engine →
-research agent → coding-agent integration → evals → LangGraph workflows when
-stateful multi-step flows demand it.
+Fase 1 vertical slice ✔ → Fase 2 multi-provider live ✔ → knowledge ingestion
+formats (PDF/HTML) → memory extraction/approval → tutorial engine → research
+agent → coding-agent integration → evals → LangGraph workflows when stateful
+multi-step flows demand it.
