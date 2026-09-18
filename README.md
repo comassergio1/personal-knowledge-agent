@@ -9,13 +9,16 @@ The application owns Conversations, Documents, Knowledge, Memories, Embeddings,
 Research, Projects, and Evals. LLM providers (Ollama, PayPerQ, OpenCode Go) only
 provide inference — switching providers never loses or touches your data.
 
-**Current status: Fase 2 — multi-provider, live-validated.**
+**Current status: Fase 3 — file-first knowledge vault.**
 
-Documents → embeddings → Qdrant → retrieval → grounded chat via the LLM
-Gateway, with **Ollama (local)**, **PayPerQ** (`deepseek/deepseek-v4.1-flash`)
-and **OpenCode Go** (`glm-5.3`) all validated against the real providers, and
-per-request token/cost accounting (§30). Memory extraction, research,
-tutorials, evals, and the coding-agent integration are later phases.
+Documents are **markdown files on disk** in an Obsidian-compatible vault
+(`data/vault`, gitignored): ingest writes them, you edit them in Obsidian, and
+`POST /vault/sync` (or per-document resync) re-indexes your edits into
+SQLite+Qdrant. Projects organize knowledge; PDFs are ingested (text extracted
+for RAG, file kept in the vault) while PDF export stays yours. Three LLM
+providers live (Ollama, PayPerQ, OpenCode Go) with per-request cost accounting.
+Memory extraction, research, tutorials, evals, and the coding-agent
+integration are later phases.
 
 ## Architecture
 
@@ -73,14 +76,34 @@ uv run python scripts/smoke_e2e.py
 Ingests `examples/mikrotik.md`, lists documents, asks "¿Cómo configuramos las
 VLANs en mi MikroTik?", and prints the grounded answer with its sources.
 
+## Knowledge vault (Obsidian)
+
+Knowledge is stored as **markdown files on disk** so you own it and can edit it
+with any tool — Obsidian works out of the box:
+
+- The vault lives at `VAULT_PATH` (default `data/vault`, gitignored). Open that
+  folder with Obsidian's "Open folder as vault" to browse and edit your notes.
+- Each project maps to a folder (`slugify(project.name)`); files without a
+  project go to `inbox/`. Safe kebab-case filenames (`slugify(title)`).
+- **Editing a note** (in Obsidian or any editor): `GET /documents/{id}` reports
+  `stale: true`; `POST /documents/{id}/resync` re-indexes one note, or
+  `POST /vault/sync` reconciles the whole vault (created/updated/deleted).
+- PDF uploads are copied into the vault as `.pdf` and their text is extracted
+  (pypdf) for RAG. Exporting markdown → PDF stays your job.
+- Deleting a project removes its documents (rows + vectors + vault files).
+
 ## API (prefix `/api/v1`)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/documents` | Upload a markdown/txt file (multipart) → stored, chunked, embedded, indexed |
-| GET | `/documents` | List documents |
+| POST | `/documents` | Upload a markdown/txt/PDF file (multipart) → stored, chunked, embedded, indexed |
+| GET | `/documents` | List documents (optional `?project_id=` filter) |
+| GET | `/documents/{id}` | Detail: file content + `stale` flag (edited on disk?) |
+| POST | `/documents/{id}/resync` | Re-index one document after editing its vault file |
 | DELETE | `/documents/{id}` | Delete document (rows + vector points) |
-| POST | `/chat` | `{"message": "...", "top_k": 5, "document_id": "..."}` → grounded answer + sources |
+| POST | `/projects` · GET · DELETE | Project CRUD (DELETE cascades docs + vectors + vault files) |
+| POST | `/vault/sync` | Scan the vault: create/update/delete rows+vectors to match files |
+| POST | `/chat` | `{"message": "...", "top_k": 5, "document_id": "...", "project_id": "..."}` → grounded answer + sources |
 | GET | `/usage` | Recent per-request LLM usage, totals, and per-provider breakdown (§30) |
 | GET | `/health` | App status + Qdrant/Ollama reachability (never 5xx) |
 
@@ -157,23 +180,23 @@ uv run ruff check app tests
 
 ```
 app/
-  api/routes/      chat · documents · health · usage
+  api/routes/      chat · documents · health · projects · sync · usage
   core/            config (pydantic-settings) · logging
-  domain/models/   Document · Chunk · LLMUsage (SQLAlchemy 2.0)
+  domain/models/   Document · Chunk · Project · LLMUsage (SQLAlchemy 2.0)
   providers/       llm/ (base · ollama · payperq · opencode_go · factory)
                    embeddings/ (base · ollama · factory)
-  repositories/    document_repository · usage_repository
-  schemas/         document · chat · usage
-  services/        chunking · ingestion · retrieval · chat
+  repositories/    document_repository · project_repository · usage_repository
+  schemas/         document · chat · project · sync · usage
+  services/        chunking · ingestion · retrieval · chat · sync · vault
   vector/          qdrant store · collections constants
 examples/          sample knowledge document
 scripts/           smoke_e2e.py
-odd/tasks/         feature tracking (vertical-slice, phase2-multi-provider)
+odd/tasks/         feature tracking (vertical-slice, phase2, phase3)
 ```
 
 ## Roadmap
 
-Fase 1 vertical slice ✔ → Fase 2 multi-provider live ✔ → knowledge ingestion
-formats (PDF/HTML) → memory extraction/approval → tutorial engine → research
-agent → coding-agent integration → evals → LangGraph workflows when stateful
-multi-step flows demand it.
+Fase 1 vertical slice ✔ → Fase 2 multi-provider live ✔ → Fase 3 knowledge
+vault + projects + PDF ✔ → Fase 4 memory extraction/approval → tutorial engine
+→ research agent → coding-agent integration → evals → LangGraph workflows when
+stateful multi-step flows demand it.

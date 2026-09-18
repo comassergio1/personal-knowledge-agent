@@ -3,7 +3,7 @@
 **Project**: Personal Knowledge Agent (PKA).
 **Spec source**: `Personal Knowledge Agent.md`, sections 4, 9, 14–17.
 **Branch policy**: commits on `main`.
-**Status**: in_progress
+**Status**: done — file-first vault, projects, PDF, sync (2026-09-18)
 
 ## Scope (Phase 3, user-shaped 2026-09-18)
 
@@ -38,7 +38,7 @@
 | 5 | Ingestion file-first: write md/txt to vault; PDF copy + text extraction (pypdf) | in_progress | |
 | 6 | `GET /documents/{id}` file content + stale flag; `POST /documents/{id}/resync`; `POST /vault/sync` | in_progress | |
 | 7 | Tests: vault, projects, pdf, resync/sync, filters | in_progress | |
-| 8 | Live E2E (create → edit file → sync → chat reflects edit; PDF chat) + README | pending | |
+| 8 | Live E2E (create → edit file → sync → chat reflects edit; PDF chat) + README | done | cd07640 + docs |
 
 ## Acceptance criteria
 
@@ -50,3 +50,12 @@
 ## Evidence
 
 - `c07f064` feat: Obsidian-compatible vault base, projects, and project filters (tasks 1–4).
+- `cd07640` feat: file-first ingestion and Obsidian-style vault sync (tasks 5–7).
+- `(fix)` file-DB regression tests write the vault into tmp_path (real-vault pollution found in test run).
+
+### Live verification (task 8, real stack)
+
+- Project "Home Lab" → upload `mikrotik.md` → real file at `data/vault/home-lab/mikrotik-vlans.md`.
+- Edit file (append "VLAN 60 para cámaras"): `GET /documents/{id}` → `stale: True`; `POST /resync` → `stale: False`, content includes the edit; chat answers "Se utiliza la **VLAN 60** para las cámaras" — the Obsidian-edit → memory flow works.
+- PDF (real, via cupsfilter): upload → text extracted ("VLAN 70", port ether5, tag) stored in vault as `guests-vlan70.pdf`; chat cites "puerto ether5 con tag VLAN 70 [1]".
+- Project filter: chat with `project_id` scopes retrieval.
