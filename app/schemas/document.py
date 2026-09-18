@@ -21,6 +21,20 @@ class DocumentRead(BaseModel):
     chunk_count: int
 
 
+class DocumentDetail(DocumentRead):
+    """One document with its current content and file staleness.
+
+    ``content`` is the vault file's text when the file exists on disk (the
+    source of truth), else the content column; PDFs always show the extracted
+    text from the database. ``stale`` is True when the file on disk is newer
+    than both the recorded ``file_mtime`` and the row's ``updated_at``.
+    """
+
+    content: str
+    file_path: str | None
+    stale: bool
+
+
 class DocumentCreate(BaseModel):
     """Payload for creating a document."""
 

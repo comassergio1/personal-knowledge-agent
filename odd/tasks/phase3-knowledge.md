@@ -31,13 +31,13 @@
 
 | # | Task | Status | Commit |
 |---|------|--------|--------|
-| 1 | Config `vault_path` + `VAULT_PATH` in env.template (+ contract test sync) | pending | |
-| 2 | `VaultService`: paths, safe slugs, write/read/delete/scan + folder-per-project | pending | |
-| 3 | `Project` model + `Document.file_path`/`file_mtime` + migration | pending | |
-| 4 | ProjectRepository + `/projects` routes + project filters (documents list, chat, vector payload) | pending | |
-| 5 | Ingestion file-first: write md/txt to vault; PDF copy + text extraction (pypdf) | pending | |
-| 6 | `GET /documents/{id}` file content + stale flag; `POST /documents/{id}/resync`; `POST /vault/sync` | pending | |
-| 7 | Tests: vault, projects, pdf, resync/sync, filters | pending | |
+| 1 | Config `vault_path` + `VAULT_PATH` in env.template (+ contract test sync) | done | c07f064 |
+| 2 | `VaultService`: paths, safe slugs, write/read/delete/scan + folder-per-project | done | c07f064 |
+| 3 | `Project` model + `Document.file_path`/`file_mtime` + migration | done | c07f064 |
+| 4 | ProjectRepository + `/projects` routes + project filters (documents list, chat, vector payload) | done | c07f064 |
+| 5 | Ingestion file-first: write md/txt to vault; PDF copy + text extraction (pypdf) | in_progress | |
+| 6 | `GET /documents/{id}` file content + stale flag; `POST /documents/{id}/resync`; `POST /vault/sync` | in_progress | |
+| 7 | Tests: vault, projects, pdf, resync/sync, filters | in_progress | |
 | 8 | Live E2E (create → edit file → sync → chat reflects edit; PDF chat) + README | pending | |
 
 ## Acceptance criteria
@@ -49,4 +49,4 @@
 
 ## Evidence
 
-- Commit ids appended here as units close.
+- `c07f064` feat: Obsidian-compatible vault base, projects, and project filters (tasks 1–4).

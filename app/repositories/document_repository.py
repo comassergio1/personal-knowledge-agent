@@ -8,6 +8,7 @@ them).
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +32,8 @@ class DocumentRepository:
         source_type: str = "text",
         source_uri: str | None = None,
         project_id: str | None = None,
+        file_path: str | None = None,
+        file_mtime: datetime | None = None,
         chunks: Sequence[Chunk] | None = None,
     ) -> Document:
         """Create a document with its chunks in one transaction."""
@@ -41,6 +44,8 @@ class DocumentRepository:
             source_type=source_type,
             source_uri=source_uri,
             project_id=project_id,
+            file_path=file_path,
+            file_mtime=file_mtime,
         )
         # Always initialize the collection so it is never lazy-loaded in an
         # async context after commit.
@@ -58,6 +63,24 @@ class DocumentRepository:
         )
         return await self._session.scalar(stmt)
 
+    async def get_by_file_path(self, rel_path: str) -> Document | None:
+        """Return the document stored for a vault-relative path, or None."""
+        stmt = (
+            select(Document)
+            .options(selectinload(Document.chunks))
+            .where(Document.file_path == rel_path)
+        )
+        return await self._session.scalar(stmt)
+
+    async def list_with_file_paths(self) -> Sequence[Document]:
+        """Return every document that has a vault file (chunks NOT loaded).
+
+        Used by vault sync to reconcile rows against the files on disk; the
+        chunk rows are not needed, so they stay unloaded to keep the scan fast.
+        """
+        stmt = select(Document).where(Document.file_path.is_not(None))
+        return (await self._session.scalars(stmt)).all()
+
     async def list(self, project_id: str | None = None) -> Sequence[Document]:
         """Return documents (chunks loaded), newest first, optionally scoped.
 
@@ -72,6 +95,30 @@ class DocumentRepository:
         if project_id is not None:
             stmt = stmt.where(Document.project_id == project_id)
         return (await self._session.scalars(stmt)).all()
+
+    async def replace_file_content(
+        self,
+        document_id: str,
+        *,
+        content: str,
+        file_mtime: datetime,
+        chunks: Sequence[Chunk],
+    ) -> Document | None:
+        """Replace a document's content and chunks, bumping ``updated_at``.
+
+        The old chunk rows are cascade-deleted on commit and the new ones take
+        their place. ``file_mtime`` is refreshed to the file's current mtime so
+        the row is no longer stale. Returns None when the document is missing.
+        """
+        document = await self.get(document_id)
+        if document is None:
+            return None
+        document.content = content
+        document.file_mtime = file_mtime
+        document.updated_at = datetime.now(UTC)
+        document.chunks = list(chunks)
+        await self._session.commit()
+        return document
 
     async def delete(self, document_id: str) -> bool:
         """Delete a document and its chunks. Returns False when not found."""

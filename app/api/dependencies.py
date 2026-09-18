@@ -18,6 +18,7 @@ from app.repositories.usage_repository import UsageRepository
 from app.services.chat_service import ChatService
 from app.services.ingestion_service import IngestionService
 from app.services.retrieval_service import RetrievalService
+from app.services.sync_service import SyncService
 from app.services.vault_service import VaultService
 from app.vector.qdrant import QdrantVectorStore
 
@@ -72,3 +73,8 @@ def get_usage_repository(request: Request) -> UsageRepository:
 def get_vault_service(request: Request) -> VaultService:
     """Return the shared vault service from ``app.state``."""
     return request.app.state.vault_service
+
+
+def get_sync_service(request: Request) -> SyncService:
+    """Return the shared vault sync service from ``app.state``."""
+    return request.app.state.sync_service

@@ -60,14 +60,24 @@ class VaultService:
         is appended until an unused name is found (Obsidian-style dedupe).
         Parent folders are created at write time, not here.
         """
-        folder = self.project_folder(project_name)
-        base = self.slugify(title)
-        candidate = folder / f"{base}.md"
+        return self._dedupe_path(
+            self.project_folder(project_name), self.slugify(title), ".md"
+        )
+
+    def pdf_path(self, project_name: str, title: str) -> Path:
+        """Return an absolute PDF path, deduped exactly like markdown_path."""
+        return self._dedupe_path(
+            self.project_folder(project_name), self.slugify(title), ".pdf"
+        )
+
+    def _dedupe_path(self, folder: Path, base: str, suffix: str) -> Path:
+        """Return ``folder / base + suffix``, appending ``-2``, ``-3``, … as needed."""
+        candidate = folder / f"{base}{suffix}"
         if not candidate.exists():
             return candidate
         index = 2
         while True:
-            candidate = folder / f"{base}-{index}.md"
+            candidate = folder / f"{base}-{index}{suffix}"
             if not candidate.exists():
                 return candidate
             index += 1
@@ -85,9 +95,19 @@ class VaultService:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
 
+    def write_bytes(self, path: Path | str, content: bytes) -> None:
+        """Write ``content`` verbatim, creating parent folders as needed."""
+        target = self._resolve(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+
     def read_text(self, path: Path | str) -> str:
         """Return the UTF-8 content of a vault file."""
         return self._resolve(path).read_text(encoding="utf-8")
+
+    def read_bytes(self, path: Path | str) -> bytes:
+        """Return the raw bytes of a vault file."""
+        return self._resolve(path).read_bytes()
 
     def delete(self, path: Path | str) -> None:
         """Delete a vault file, ignoring a missing file."""
@@ -99,6 +119,10 @@ class VaultService:
     def exists(self, path: Path | str) -> bool:
         """Return whether the vault file exists."""
         return self._resolve(path).exists()
+
+    def relative_path(self, path: Path | str) -> str:
+        """Return the POSIX vault-relative path for any vault path."""
+        return self._resolve(path).relative_to(self._root).as_posix()
 
     def mtime(self, path: Path | str) -> datetime | None:
         """Return the file's modification time as a UTC datetime, else None."""

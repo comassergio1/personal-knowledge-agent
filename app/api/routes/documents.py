@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_db, get_ingestion_service, get_vector_store
 from app.domain.models.document import Document
 from app.repositories.document_repository import DocumentRepository
-from app.schemas.document import DocumentList, DocumentRead
-from app.services.ingestion_service import IngestionService
+from app.schemas.document import DocumentDetail, DocumentList, DocumentRead
+from app.services.ingestion_service import IngestionService, ResyncError
 from app.vector.qdrant import QdrantVectorStore
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -49,17 +49,25 @@ async def create_document(
     title: Annotated[str | None, Form()] = None,
     project_id: Annotated[str | None, Form()] = None,
 ) -> DocumentRead:
-    """Ingest an uploaded markdown/plain-text file (chunk → embed → upsert)."""
-    raw = (await file.read()).decode("utf-8")
-    content = raw.strip()
+    """Ingest an uploaded file: PDFs are stored + text-extracted, plain text
+    is written into the vault; both go through chunk → embed → upsert."""
     filename = file.filename or "document"
-    document = await ingestion_service.ingest(
-        title=title or Path(filename).stem,
-        content=content,
-        mime_type=_mime_type(filename),
-        source_type="file",
-        project_id=project_id,
-    )
+    resolved_title = title or Path(filename).stem
+    if Path(filename).suffix.lower() == ".pdf":
+        document = await ingestion_service.ingest_pdf(
+            title=resolved_title,
+            pdf_bytes=await file.read(),
+            project_id=project_id,
+        )
+    else:
+        content = (await file.read()).decode("utf-8").strip()
+        document = await ingestion_service.ingest(
+            title=resolved_title,
+            content=content,
+            mime_type=_mime_type(filename),
+            source_type="file",
+            project_id=project_id,
+        )
     return _to_read(document)
 
 
@@ -71,6 +79,37 @@ async def list_documents(
     """Return documents, newest first, optionally scoped to one project."""
     documents = await DocumentRepository(session).list(project_id=project_id)
     return DocumentList(items=[_to_read(d) for d in documents], total=len(documents))
+
+
+@router.get("/{document_id}", response_model=DocumentDetail)
+async def get_document_detail(
+    document_id: str,
+    ingestion_service: Annotated[IngestionService, Depends(get_ingestion_service)],
+) -> DocumentDetail:
+    """Return one document with its file content and a ``stale`` flag."""
+    detail = await ingestion_service.detail(document_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return detail
+
+
+@router.post("/{document_id}/resync", response_model=DocumentDetail)
+async def resync_document(
+    document_id: str,
+    ingestion_service: Annotated[IngestionService, Depends(get_ingestion_service)],
+) -> DocumentDetail:
+    """Re-read a document's vault file, re-extract, and re-embed it.
+
+    Returns 404 when the document is missing and a 4xx when its vault file is
+    gone from disk.
+    """
+    try:
+        detail = await ingestion_service.resync(document_id)
+    except ResyncError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return detail
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
