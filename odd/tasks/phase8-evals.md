@@ -3,7 +3,7 @@
 **Project**: Personal Knowledge Agent (PKA).
 **Spec source**: `Personal Knowledge Agent.md`, sections 31–32.
 **Branch policy**: commits on `main`.
-**Status**: in_progress
+**Status**: done — evals with adversarial checks; harness returned two real fixes (2026-09-18)
 
 ## Scope (Phase 8)
 
@@ -39,7 +39,7 @@
 | 3 | `EvalService.run` orchestrator (chat flow capture → judge → metrics → persist) | in_progress | |
 | 4 | `POST /evals/run` + `GET /evals/runs` + wiring | in_progress | |
 | 5 | Sample datasets in `tests/evals/` (normal + adversarial) + offline unit tests for metrics | in_progress | |
-| 6 | Live E2E: run the datasets against the real stack (knowledge + chat + judge) + README | pending | |
+| 6 | Live E2E: run the datasets against the real stack (knowledge + chat + judge) + README | done | efb04a0 + judge-fix + docs |
 
 ## Acceptance criteria
 
@@ -50,3 +50,12 @@
 ## Evidence
 
 - `7cbeb6a` feat: eval storage and metrics/judge module (tasks 1–2).
+- `f068466` feat: eval orchestrator, routes, and sample datasets (tasks 3–5).
+- `efb04a0` fix: idempotent ingestion via content hash per project.
+- `(fix)` eval judge receives full chunk text, not 200-char excerpts.
+
+### Live verification (task 6, real stack — OpenCode Go glm-5.3)
+
+- mikrotik.json dataset: **3/3 PASS** (groundedness 1.00/0.78/0.80, correctness 1.00, source_quality 0.64–0.73).
+- mikrotik-adversarial.json (§32): **PASS**, `challenged_premise: True`, groundedness 1.0 — the agent disputed "VLAN 50 para IoT" citing VLAN 30/50 mapping.
+- **The harness returned two real defects, both fixed**: (1) duplicated ingests (repeated smoke uploads) saturated retrieval and hid the WAN/ether8 chunk → content-hash idempotency; (2) the judge graded groundedness against 200-char excerpts → full chunk text now. After both fixes the datasets pass.

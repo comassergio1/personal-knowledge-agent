@@ -9,15 +9,16 @@ The application owns Conversations, Documents, Knowledge, Memories, Embeddings,
 Research, Projects, and Evals. LLM providers (Ollama, PayPerQ, OpenCode Go) only
 provide inference — switching providers never loses or touches your data.
 
-**Current status: Fase 6 — research agent.**
+**Current status: Fase 8 — evals.**
 
-Everything from Fase 5, plus a **self-hosted research agent**: SearXNG (Docker)
-searches the web without third-party keys, trafilatura extracts page text
-locally, and `POST /research/run` writes a Spanish report (Objetivo/Resumen/
-Hallazgos con citas `[n]`/Contradicciones/Conclusión/Fuentes) into the vault,
-indexed immediately. Tutorial engine, memory, projects, PDF ingestion, three
-LLM providers with cost accounting all live. Evals and the coding-agent
-integration are later phases.
+Everything from Fase 6, plus a **knowledge-QA evaluation harness** (spec §31/§32):
+`POST /evals/run` scores the grounded chat on `correctness`, `relevance`,
+`groundedness`, `hallucination` and `source_quality` with an LLM judge, and
+adversarial cases verify the agent disputes false premises (the VLAN 50-vs-30
+case passes live). Running the evals surfed two real defects already fixed:
+duplicated ingests degraded retrieval recall (fixed with content-hash
+idempotency) and the judge was grading against 200-char excerpts (now full
+chunk text). Coding-agent integration (Fase 7) remains.
 
 ## Architecture
 
@@ -106,6 +107,8 @@ with any tool — Obsidian works out of the box:
 | POST | `/memories/extract` | `{"conversation": [{"role", "content"}...]}` → candidate memories (redacted) |
 | POST | `/tutorials/generate` | `{"objective": "...", "project_id": "...", "title": "..."}` → Spanish step-by-step tutorial written to the vault + indexed |
 | POST | `/research/run` | `{"question": "...", "project_id": "...", "max_sources": 6}` → Spanish research report with cited sources, saved to the vault (SearXNG + trafilatura) |
+| POST | `/evals/run` | `{"dataset": [{"question", "expected_facts", "adversarial"}...]}` → per-case metrics + verdicts (spec §31/§32) |
+| GET | `/evals/runs` | Eval history (newest first) |
 | GET | `/memories` · `/{id}` | List (`?type=`/`?status=`) / get memories |
 | POST | `/memories/{id}/approve` · `/reject` | Validation gate: approve stores vector + Obsidian mirror |
 | DELETE | `/memories/{id}` | Remove memory (row + vector + mirror) |
@@ -169,6 +172,26 @@ immediately; re-read it with `GET /documents/{id}`. With SearXNG down the
 endpoint answers 503 cleanly and the rest of the app keeps working. Turning
 findings into long-term facts stays manual via `POST /memories/extract`
 (spec §22: no automatic knowledge pollution).
+
+## Evals (Fase 8)
+
+`POST /evals/run` checks the grounded chat against a dataset (Spanish;
+examples in `tests/evals/mikrotik.json` + `mikrotik-adversarial.json`):
+
+- Per case: a grounded answer is produced (same retrieval/chat pipeline), then
+  an **LLM judge** scores `correctness` (expected facts covered), `relevance`,
+  `groundedness` (claims supported by the FULL source chunks — not the API
+  excerpts), `hallucination_rate` and `source_quality`. Heuristics fill in when
+  the judge's JSON fails; nothing aborts the batch.
+- **Adversarial cases** (spec §32) also require `challenged_premise`: the
+  answer must dispute a false premise (e.g. "¿Configuramos la VLAN 50 para
+  IoT?" when knowledge says IoT = VLAN 30) or the case fails.
+- Verdict thresholds are configurable per run; runs persist for history
+  (`GET /evals/runs`) and never pollute the knowledge base or prompts.
+- Live results (2026-09-18): mikrotik dataset 3/3 PASS; adversarial PASS with
+  the premise challenged. The harness also caught and fixed two real defects:
+  ingest duplication hurting recall (idempotent content hash) and judge
+  ground-truth being too short (full chunks now).
 
 ## Tutorials (Fase 5)
 
@@ -242,9 +265,9 @@ app/
   providers/       llm/ (base · ollama · payperq · opencode_go · factory)
                    embeddings/ (base · ollama · factory)
   repositories/    document · project · memory · usage
-  schemas/         document · chat · project · memory · sync · tutorial · usage
-  services/        chunking · ingestion · retrieval · chat · memory · redaction
-                   research · sync · tutorial · vault
+  schemas/         document · chat · project · memory · eval · sync · tutorial · usage
+  services/        chunking · ingestion · retrieval · chat · eval · memory · research
+                   redaction · sync · tutorial · vault
   providers/       llm/ · embeddings/ · search/ (searxng)
   vector/          qdrant store (knowledge + memories) · collections constants
 examples/          sample knowledge document
@@ -255,7 +278,8 @@ odd/tasks/         feature tracking (vertical-slice, phase2-5)
 ## Roadmap
 
 Fase 1 vertical slice ✔ → Fase 2 multi-provider ✔ → Fase 3 knowledge vault +
-projects + PDF ✔ → Fase 4 memory (extraction + approval + chat) ✔ → Fase 5
-tutorial generator ✔ → Fase 6 research agent (SearXNG + trafilatura + citas) ✔
-→ coding-agent integration → evals → LangGraph workflows when stateful
-multi-step flows demand it.
+projects + PDF ✔ → Fase 4 memory ✔ → Fase 5 tutorials ✔ → Fase 6 research
+agent ✔ → Fase 8 evals (surfaced + fixed two defects) ✔ → Fase 7 coding-agent
+integration (OpenCode headless behind a `CodingAgent` interface — user
+decision 2026-09-18: Pi stays the interactive desk harness; `opencode run` is
+the server-invoked worker) → LangGraph when stateful flows demand it.
