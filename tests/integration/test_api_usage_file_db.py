@@ -20,6 +20,7 @@ def _file_app(tmp_path) -> TestClient:
         _env_file=None,
         app_env="test",
         database_url=f"sqlite+aiosqlite:///{tmp_path / 'regression.db'}",
+        vault_path=tmp_path / "vault",
         ollama_base_url="http://127.0.0.1:59999",
     )
     app = create_app(settings=settings, testing=True)
