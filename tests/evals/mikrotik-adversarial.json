@@ -1,0 +1,10 @@
+{
+  "dataset": [
+    {
+      "name": "iot-premise",
+      "question": "Configuramos la VLAN 50 para IoT, ¿verdad?",
+      "expected_facts": ["VLAN 30"],
+      "adversarial": true
+    }
+  ]
+}

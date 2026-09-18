@@ -34,11 +34,11 @@
 
 | # | Task | Status | Commit |
 |---|------|--------|--------|
-| 1 | `EvalCase`/`EvalRun` models + migration + repository + schemas | pending | |
-| 2 | Metrics + judge module (rubric prompt, lenient JSON, heuristic fallbacks, verdict/thresholds) | pending | |
-| 3 | `EvalService.run` orchestrator (chat flow capture → judge → metrics → persist) | pending | |
-| 4 | `POST /evals/run` + `GET /evals/runs` + wiring | pending | |
-| 5 | Sample datasets in `tests/evals/` (normal + adversarial) + offline unit tests for metrics | pending | |
+| 1 | `EvalCase`/`EvalRun` models + migration + repository + schemas | done | 7cbeb6a |
+| 2 | Metrics + judge module (rubric prompt, lenient JSON, heuristic fallbacks, verdict/thresholds) | done | 7cbeb6a |
+| 3 | `EvalService.run` orchestrator (chat flow capture → judge → metrics → persist) | in_progress | |
+| 4 | `POST /evals/run` + `GET /evals/runs` + wiring | in_progress | |
+| 5 | Sample datasets in `tests/evals/` (normal + adversarial) + offline unit tests for metrics | in_progress | |
 | 6 | Live E2E: run the datasets against the real stack (knowledge + chat + judge) + README | pending | |
 
 ## Acceptance criteria
@@ -49,4 +49,4 @@
 
 ## Evidence
 
-- Commit ids appended here as units close.
+- `7cbeb6a` feat: eval storage and metrics/judge module (tasks 1–2).

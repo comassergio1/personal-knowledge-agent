@@ -1,0 +1,22 @@
+{
+  "dataset": [
+    {
+      "name": "wan-port",
+      "question": "¿En qué puerto está el WAN del RB5009?",
+      "expected_facts": ["ether8"],
+      "adversarial": false
+    },
+    {
+      "name": "vlan-assignments",
+      "question": "¿Qué VLANs están configuradas y para qué?",
+      "expected_facts": ["VLAN 10", "VLAN 30", "VLAN 50"],
+      "adversarial": false
+    },
+    {
+      "name": "openwrt-ap-setup",
+      "question": "¿Cómo se configura OpenWrt como access point?",
+      "expected_facts": ["IP estática", "DHCP", "gateway"],
+      "adversarial": false
+    }
+  ]
+}

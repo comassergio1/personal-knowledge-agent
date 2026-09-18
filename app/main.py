@@ -26,6 +26,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.routes.chat import router as chat_router
 from app.api.routes.documents import router as documents_router
+from app.api.routes.evals import router as evals_router
 from app.api.routes.health import router as health_router
 from app.api.routes.memories import router as memories_router
 from app.api.routes.projects import router as projects_router
@@ -45,10 +46,13 @@ from app.providers.search.base import SearchHit as GatewaySearchHit
 from app.providers.search.base import SearchProvider
 from app.providers.search.factory import SearchProviderFactory
 from app.repositories.document_repository import DocumentRepository
+from app.repositories.eval_repository import EvalRepository
 from app.repositories.memory_repository import MemoryRepository
 from app.repositories.project_repository import ProjectRepository
 from app.repositories.usage_repository import UsageRepository
 from app.services.chat_service import ChatService
+from app.services.eval_metrics import JUDGE_PROMPT_MARKER
+from app.services.eval_service import EvalService
 from app.services.ingestion_service import IngestionService
 from app.services.memory_extractor import MemoryExtractor
 from app.services.memory_service import MemoryService
@@ -101,8 +105,8 @@ class _FakeLLM(LLMProvider):
 
     Memory-extraction prompts get a canned candidate array (containing a
     secret, so redaction is exercised); research prompts get a canned
-    interpretation and a canned Spanish report; everything else gets a
-    canned chat answer.
+    interpretation and a canned Spanish report; judge prompts (eval) get a
+    canned rubric JSON; everything else gets a canned chat answer.
     """
 
     name = "fake-llm"
@@ -121,6 +125,14 @@ class _FakeLLM(LLMProvider):
             content = _CANNED_RESEARCH_INTERPRETATION
         elif _RESEARCH_SYNTHESIZE_MARKER in joined:
             content = _CANNED_RESEARCH_REPORT
+        elif JUDGE_PROMPT_MARKER in joined:
+            # One frozen rubric that clears the default thresholds for normal
+            # cases AND adversarial ones (challenged_premise true), keeping
+            # the offline eval flow green without per-case fake logic.
+            content = (
+                '{"correctness": 0.9, "relevance": 0.8, "groundedness": 0.8, '
+                '"hallucination_claims": [], "challenged_premise": true}'
+            )
         else:
             content = "This is a fake grounded answer."
         return LLMResult(
@@ -406,6 +418,16 @@ def _make_lifespan(
         )
         app.state.search_provider = search_provider
 
+        # Eval runs their own app-lifetime session, mirroring the other
+        # repositories; the judge reuses the shared LLM provider.
+        eval_session = session_factory()
+        app.state.eval_service = EvalService(
+            chat_service,
+            llm,
+            EvalRepository(eval_session),
+            settings,
+        )
+
         _logger.info(
             "application started",
             extra={
@@ -430,6 +452,7 @@ def _make_lifespan(
             await ingestion_session.close()
             await usage_session.close()
             await memory_session.close()
+            await eval_session.close()
             await engine.dispose()
             _logger.info("application stopped", extra={"env": settings.app_env})
 
@@ -454,6 +477,7 @@ def create_app(settings: Settings | None = None, *, testing: bool = False) -> Fa
     )
     app.include_router(chat_router, prefix="/api/v1")
     app.include_router(documents_router, prefix="/api/v1")
+    app.include_router(evals_router, prefix="/api/v1")
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(memories_router, prefix="/api/v1")
     app.include_router(projects_router, prefix="/api/v1")

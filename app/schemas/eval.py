@@ -87,6 +87,10 @@ class EvalRunRead(BaseModel):
 
     summary: EvalRunSummary
     cases: list[EvalCaseResultRead]
+    # Engine that produced the metrics: "llm" when the app runs a judge
+    # provider, "heuristics" when it was built without one (offline runs
+    # never raise on the missing judge, they just degrade).
+    judge: Literal["llm", "heuristics"] = "llm"
 
 
 class EvalRunHistoryItem(BaseModel):

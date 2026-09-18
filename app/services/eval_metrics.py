@@ -31,6 +31,13 @@ _WORD_RE = re.compile(r"\w+", re.UNICODE)
 # Strips ```json ... ``` fences (with or without the language tag).
 _FENCE_RE = re.compile(r"^```[a-zA-Z]*\s*|\s*```$")
 
+# Stable marker identifying the judge system prompt. The testing fake LLM in
+# ``app.main`` keys off it to answer judge calls with canned rubric JSON; it
+# must remain a substring of ``_JUDGE_SYSTEM_PROMPT`` below.
+JUDGE_PROMPT_MARKER = (
+    "You are a strict evaluator of assistant answers for a personal knowledge agent"
+)
+
 _JUDGE_SYSTEM_PROMPT = (
     "You are a strict evaluator of assistant answers for a personal knowledge "
     "agent. You receive a question, the expected facts the answer must cover, "

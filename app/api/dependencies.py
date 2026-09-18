@@ -18,6 +18,7 @@ from app.providers.search.base import SearchProvider
 from app.repositories.memory_repository import MemoryRepository
 from app.repositories.usage_repository import UsageRepository
 from app.services.chat_service import ChatService
+from app.services.eval_service import EvalService
 from app.services.ingestion_service import IngestionService
 from app.services.memory_service import MemoryService
 from app.services.research_service import ResearchService
@@ -53,6 +54,11 @@ def get_retrieval_service(request: Request) -> RetrievalService:
 def get_chat_service(request: Request) -> ChatService:
     """Return the shared chat service from ``app.state``."""
     return request.app.state.chat_service
+
+
+def get_eval_service(request: Request) -> EvalService:
+    """Return the shared eval service from ``app.state``."""
+    return request.app.state.eval_service
 
 
 def get_vector_store(request: Request) -> QdrantVectorStore:
