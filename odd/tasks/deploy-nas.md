@@ -52,3 +52,9 @@
 - `docker build -f deploy/nas/Dockerfile` → image `pka:local` OK (fix: README.md debe copiarse a la capa de deps — hatchling lo exige).
 - `docker compose config` válido (env_file `.env` string; la validación se hizo sobre copia temporal con `env.template` para no crear `.env` — política Pi; nota: la forma objeto `required:false` no la acepta Compose v5).
 - Boot smoke de la imagen contra los servicios del host: `/api/v1/health` → `{qdrant: true, ollama: true}`; la consola sirve; `/v1/models` → `my-notebooklm`. (El primer intento con `LLM_PROVIDER=opencode_go` sin key crashea el startup como está diseñado — el `.env` del stack provee la key.)
+
+### Variante light (tasks 5–6, 4 GB)
+
+- `open-webui` detrás de `profiles: ["ui"]`: default = `app qdrant searxng ollama` (cerebro sin UI, ~1–1.3 GB); `docker compose --profile ui up -d` agrega la UI (`+ open-webui`).
+- Retry de arranque: `_ensure_collections_ready` (10 intentos × 5s) — el app sobrevive al boot con qdrant todavía arrancando (Docker no garantiza orden al daemon start); 2 unit tests.
+- Runbook: tabla light/full por RAM (4 GB + swap 2 GB = light; 8 GB = full; 16 GB sobra), pasos de swapfile OMV, nota de auto-arranque+auto-curación.
