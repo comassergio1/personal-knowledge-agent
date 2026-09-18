@@ -4,6 +4,7 @@
 **Driver**: user question 2026-09-18 (web UI path decision): expose PKA as an OpenAI-compatible provider so the already-running Open WebUI (port 3000) becomes the chat UI while PKA keeps ownership of knowledge/memory. Optional later: a minimal own console for memory/vault/learn/map.
 
 **Branch policy**: commits on `main`.
+**Status**: done — OpenAI-compatible surface, Open WebUI-ready (2026-09-18).
 
 ## Scope
 
@@ -35,7 +36,7 @@
 | 1 | `ChatResult` token counts (additive) + schemas | pending | |
 | 2 | `/v1/models` + `/v1/chat/completions` (non-stream + SSE pseudo-stream) + sources block | pending | |
 | 3 | Wiring + tests (unit format/edge + integration via test app) | pending | |
-| 4 | Live E2E: real server curl + `host.docker.internal` reachability + connect Open WebUI (user click-path documented) + README | pending | |
+| 4 | Live E2E: real server curl + `host.docker.internal` reachability + connect Open WebUI (user click-path documented) + README | done | 91e8703 + docs |
 
 ## Acceptance criteria
 
@@ -44,4 +45,11 @@
 
 ## Evidence
 
-- Commit ids appended here as units close.
+- `91e8703` feat: OpenAI-compatible surface (tasks 1–3).
+
+### Live E2E (task 4, real server on :8000 — OpenCode Go provider)
+
+- `uvicorn app.main:create_app --factory` (note: the fastapi app is a factory; `app.main:app` does not exist).
+- `GET /v1/models` → `my-notebooklm`; `POST /v1/chat/completions` → grounded answer ("WAN del MikroTik está en el puerto **ether8**") + Fuentes block + usage (936/225/1161).
+- `stream: true` → SSE with the OpenAI chunk framing + `[DONE]`.
+- From inside the Open WebUI container: `http://host.docker.internal:8000/v1/models` reachable — the click-path in the README connects it as an OpenAI provider.

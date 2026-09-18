@@ -156,6 +156,29 @@ chat/coding secondary:
   (`Conceptos`, `Tutoriales`, `Experiencias`, `Recursos`, `Huecos`), citing
   your own material and calling out what is missing.
 
+## OpenAI-compatible surface + Open WebUI
+
+PKA speaks the OpenAI wire format, so any OpenAI-compatible client can use the
+grounded chat (retrieval + memory + sources):
+
+```bash
+GET  /v1/models              → "my-notebooklm"
+POST /v1/chat/completions    → grounded answer + **Fuentes** block (+ SSE stream)
+```
+
+**Connect Open WebUI** (the already-running container):
+
+1. Open WebUI → Settings → **Connections/Model Providers** → **OpenAI API**.
+2. URL: `http://host.docker.internal:8000/v1` (Docker Desktop macOS/Windows).
+   On Linux hosts add `--add-host host.docker.internal:host-gateway` to the
+   Open WebUI container.
+3. API key: any non-empty value (PKA has no auth in v1; LAN personal server).
+4. The `my-notebooklm` model appears in the model picker.
+
+**Guard rule:** Open WebUI is a *client*. Do NOT enable its own knowledge/RAG
+or upload documents there — knowledge and memory must live only in PKA
+(no split memory, spec §7/§42).
+
 ## Integrations (optional, future)
 
 - **Coding agent (OpenCode headless)** — deferred out of the core by the
