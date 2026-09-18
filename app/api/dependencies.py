@@ -21,6 +21,7 @@ from app.services.ingestion_service import IngestionService
 from app.services.memory_service import MemoryService
 from app.services.retrieval_service import RetrievalService
 from app.services.sync_service import SyncService
+from app.services.tutorial_service import TutorialService
 from app.services.vault_service import VaultService
 from app.vector.qdrant import QdrantVectorStore
 
@@ -90,3 +91,8 @@ def get_vault_service(request: Request) -> VaultService:
 def get_sync_service(request: Request) -> SyncService:
     """Return the shared vault sync service from ``app.state``."""
     return request.app.state.sync_service
+
+
+def get_tutorial_service(request: Request) -> TutorialService:
+    """Return the shared tutorial service from ``app.state``."""
+    return request.app.state.tutorial_service

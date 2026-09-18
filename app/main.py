@@ -30,6 +30,7 @@ from app.api.routes.health import router as health_router
 from app.api.routes.memories import router as memories_router
 from app.api.routes.projects import router as projects_router
 from app.api.routes.sync import router as sync_router
+from app.api.routes.tutorials import router as tutorials_router
 from app.api.routes.usage import router as usage_router
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger, setup_logging
@@ -49,6 +50,7 @@ from app.services.memory_extractor import MemoryExtractor
 from app.services.memory_service import MemoryService
 from app.services.retrieval_service import RetrievalService
 from app.services.sync_service import SyncService
+from app.services.tutorial_service import TutorialService
 from app.services.vault_service import VaultService
 from app.vector.collections import (
     CHUNK_ID_FIELD,
@@ -292,6 +294,15 @@ def _make_lifespan(
         app.state.memory_repository = memory_repository
         app.state.memory_store = memory_store
         app.state.memory_service = memory_service
+        app.state.tutorial_service = TutorialService(
+            llm,
+            retrieval_service,
+            memory=memory_service,
+            vault=vault_service,
+            ingestion=app.state.ingestion_service,
+            settings=settings,
+            projects=project_repository,
+        )
 
         _logger.info(
             "application started",
@@ -333,5 +344,6 @@ def create_app(settings: Settings | None = None, *, testing: bool = False) -> Fa
     app.include_router(memories_router, prefix="/api/v1")
     app.include_router(projects_router, prefix="/api/v1")
     app.include_router(sync_router, prefix="/api/v1")
+    app.include_router(tutorials_router, prefix="/api/v1")
     app.include_router(usage_router, prefix="/api/v1")
     return app
