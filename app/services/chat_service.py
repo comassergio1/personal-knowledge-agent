@@ -167,4 +167,9 @@ class ChatService:
                 "estimated_cost_usd": estimated_cost_usd,
             },
         )
-        return ChatResult(answer=answer, sources=sources)
+        return ChatResult(
+            answer=answer,
+            sources=sources,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        )

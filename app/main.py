@@ -36,6 +36,7 @@ from app.api.routes.research import router as research_router
 from app.api.routes.sync import router as sync_router
 from app.api.routes.tutorials import router as tutorials_router
 from app.api.routes.usage import router as usage_router
+from app.api.routes.v1_compat import router as v1_compat_router
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger, setup_logging
 from app.database import create_app_engine
@@ -497,6 +498,7 @@ def create_app(settings: Settings | None = None, *, testing: bool = False) -> Fa
         version=APP_VERSION,
         lifespan=_make_lifespan(settings, testing=testing),
     )
+    app.include_router(v1_compat_router)
     app.include_router(chat_router, prefix="/api/v1")
     app.include_router(documents_router, prefix="/api/v1")
     app.include_router(evals_router, prefix="/api/v1")

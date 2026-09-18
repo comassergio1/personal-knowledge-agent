@@ -20,10 +20,17 @@ class SourceRef(BaseModel):
 
 
 class ChatResult(BaseModel):
-    """A chat answer together with the sources it was grounded in."""
+    """A chat answer together with the sources it was grounded in.
+
+    ``prompt_tokens``/``completion_tokens`` are copied from the LLM provider
+    response when it reports usage (spec §30); they stay ``None`` when the
+    provider does not (e.g. the offline test fake).
+    """
 
     answer: str
     sources: list[SourceRef] = []
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
 
 
 class ChatRequest(BaseModel):
