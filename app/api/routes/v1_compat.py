@@ -15,6 +15,13 @@ heading stays in Spanish per the product language):
     **Fuentes:**
     - Note A
 
+Research-intent messages (``app.api.routes.research_intent``) take the
+research branch instead: the shared ``ResearchService`` runs the §21 flow
+(interpret → search → extract → synthesize → persist) and the report, saved
+into the vault by the service itself, is returned verbatim under a one-line
+header — no extra LLM turn. A failed research run surfaces as a 500 OpenAI
+error envelope, never a silent fallback to grounded chat.
+
 ``stream: true`` is honored as a single-shot SSE pseudo-stream in the OpenAI
 delta format: one chunk carrying the full content, then a finish chunk, then
 ``data: [DONE]``. No token-level scheduling is performed.
@@ -28,19 +35,23 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.api.dependencies import get_chat_service
+from app.api.routes.research_intent import is_research_request
+from app.core.logging import get_logger
 from app.schemas.chat import ChatResult
 from app.services.chat_service import ChatService
+from app.services.research_service import ResearchError, ResearchService
 
 router = APIRouter(prefix="/v1", tags=["v1-compat"])
 
 MODEL_ID = "my-notebooklm"
 _OWNED_BY = "pka"
 _ALLOWED_ROLES = {"system", "user", "assistant"}
+_logger = get_logger("v1_compat")
 
 
 class CompletionsMessage(BaseModel):
@@ -92,6 +103,15 @@ def _query_from_messages(messages: list[CompletionsMessage]) -> str:
     return user_messages[-1].content
 
 
+def _get_research_service(request: Request) -> ResearchService | None:
+    """The shared research service from ``app.state``, or None when unwired.
+
+    The research service is optional in this shim: apps that never wired it
+    keep the grounded chat path working without research.
+    """
+    return getattr(request.app.state, "research_service", None)
+
+
 def _usage(prompt_tokens: int | None, completion_tokens: int | None) -> dict:
     """Usage object; ``total_tokens`` is None when either count is unknown."""
     total_tokens = None
@@ -114,7 +134,9 @@ def _content_with_sources(result: ChatResult) -> str:
     return f"{result.answer}{sources_block}"
 
 
-def _completion_payload(content: str, result: ChatResult) -> dict:
+def _completion_response(
+    content: str, *, prompt_tokens: int | None, completion_tokens: int | None
+) -> dict:
     """One non-streamed chat completion in the OpenAI wire format."""
     return {
         "id": f"chatcmpl-{uuid.uuid4().hex}",
@@ -128,8 +150,17 @@ def _completion_payload(content: str, result: ChatResult) -> dict:
                 "finish_reason": "stop",
             }
         ],
-        "usage": _usage(result.prompt_tokens, result.completion_tokens),
+        "usage": _usage(prompt_tokens, completion_tokens),
     }
+
+
+def _completion_payload(content: str, result: ChatResult) -> dict:
+    """Chat completion payload with the grounded result's token counts."""
+    return _completion_response(
+        content,
+        prompt_tokens=result.prompt_tokens,
+        completion_tokens=result.completion_tokens,
+    )
 
 
 async def _stream_chunks(content: str) -> AsyncIterator[str]:
@@ -180,17 +211,56 @@ async def list_models() -> dict:
 async def chat_completions(
     request: CompletionsRequest,
     chat_service: Annotated[ChatService, Depends(get_chat_service)],
+    research_service: Annotated[ResearchService | None, Depends(_get_research_service)],
 ) -> StreamingResponse | dict:
     """Answer the last user message with a grounded OpenAI-format reply.
 
-    The chat runs through the shared ``ChatService`` with the default project
-    scope (``top_k=5``, no document/project filter). ``stream: true`` switches
-    to the SSE pseudo-stream described in the module docstring.
+    Research-intent messages (see ``app.api.routes.research_intent``) run
+    through the shared ``ResearchService`` instead: the report is persisted
+    into the vault by the service and returned under a short header, with no
+    extra chat turn; a ``ResearchError`` renders as a 500 OpenAI error
+    envelope. Every other message runs through the shared ``ChatService``
+    with the default project scope (``top_k=5``, no document/project
+    filter). ``stream: true`` switches to the SSE pseudo-stream described in
+    the module docstring.
     """
     try:
         query = _query_from_messages(request.messages)
     except _InvalidRequest as exc:
         return JSONResponse(status_code=400, content=_error(exc.message))
+
+    research_content: str | None = None
+    if research_service is not None and is_research_request(query):
+        try:
+            research_result = await research_service.run(
+                query, project_id=None, title=None
+            )
+        except ResearchError as exc:
+            # No silent fallback: the user explicitly asked for research.
+            return JSONResponse(
+                status_code=500,
+                content=_error(f"no pude completar la investigación: {exc}"),
+            )
+        if research_result.report:
+            header = (
+                "Investigación web completada. Informe guardado en el vault: "
+                f"{research_result.file_path}"
+            )
+            research_content = f"{header}\n\n---\n\n{research_result.report}"
+        else:
+            _logger.warning("research report is empty; falling back to grounded chat")
+    if research_content is not None:
+        if request.stream:
+            return StreamingResponse(
+                _stream_chunks(research_content),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache"},
+            )
+        # The research flow keeps no token accounting: usage fields are null.
+        return _completion_response(
+            research_content, prompt_tokens=None, completion_tokens=None
+        )
+
     result = await chat_service.chat(query, top_k=5)
     content = _content_with_sources(result)
     if request.stream:
