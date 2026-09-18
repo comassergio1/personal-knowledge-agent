@@ -29,6 +29,50 @@ from app.services.vault_service import VaultService
 _MAX_TITLE_LENGTH = 60
 _MEMORY_TOP_K = 5
 
+# Supported tutorial depths (Phase 7, spec change §1). ``generate`` raises
+# ValueError for anything else.
+TUTORIAL_MODES = ("do", "learn", "deep_learn")
+
+# Mode-scoped instruction blocks appended to the §20 persona text: the depth
+# grows per mode while the core headers (# Objetivo, # Verificación,
+# # Troubleshooting, # Fuentes) survive every variant. Section names stay
+# Spanish (the tutorial content language); the writer instructions are English.
+_MODE_BLOCKS: dict[str, str] = {
+    "do": (
+        "Mode do (depth 1): write concrete steps only, with minimal theory. "
+        "Use exactly these headers: # Objetivo, # Materiales, # Paso 1, "
+        "# Paso 2, ..., # Verificación, # Troubleshooting, # Rollback, "
+        "# Fuentes."
+    ),
+    "learn": (
+        "Mode learn (depth 2-3): write the steps plus the WHY behind each one "
+        "— add a '¿Por qué hacemos esto?' note under every step — plus the "
+        "prerequisite concepts and a short preparation section. Use exactly "
+        "these headers: # Objetivo, # Qué vas a aprender, # Conceptos previos, "
+        "# Preparación, # Materiales, # Paso 1, # Paso 2, ..., # Verificación, "
+        "# Troubleshooting, # Problemas frecuentes, # Rollback, # Fuentes."
+    ),
+    "deep_learn": (
+        "Mode deep_learn (depth 4): write full theory plus concepts, practice, "
+        "exercises and self-evaluation. Explain the foundational concepts "
+        "before the steps (for example 802.1Q, tagging, trunk/access for "
+        "networking topics), and add a '¿Por qué hacemos esto?' note under "
+        "every step. Use exactly these headers: # Objetivo, "
+        "# Qué vas a aprender, # Conceptos previos, # Preparación, # Materiales, "
+        "# Paso 1, # Paso 2, ..., # Verificación, # Troubleshooting, "
+        "# Problemas frecuentes, # Ejercicios, # Resumen, # Rollback, # Fuentes."
+    ),
+}
+
+
+def _mode_block(mode: str) -> str:
+    """Return ``mode``'s writer instructions, raising on unknown modes."""
+    try:
+        return _MODE_BLOCKS[mode]
+    except KeyError:
+        raise ValueError(f"unknown tutorial mode: {mode!r}") from None
+
+
 # Tutorial-writer persona and the §20 structure contract. All headers are
 # emitted verbatim in Spanish, the tutorial's content language.
 _SYSTEM_PROMPT = (
@@ -60,6 +104,8 @@ class TutorialResult:
     file_path: str | None
     content: str
     sources: list[TutorialSource]
+    # The requested depth; defaults to ``do`` so pre-Phase-7 callers stay valid.
+    mode: str = "do"
     warnings: list[str] | None = None
 
 
@@ -94,6 +140,7 @@ class TutorialService:
         project_id: str | None = None,
         title: str | None = None,
         top_k: int = 6,
+        mode: str = "do",
     ) -> TutorialResult:
         """Generate a grounded Spanish tutorial for ``objective``.
 
@@ -101,9 +148,13 @@ class TutorialService:
         chunks (scoped to ``project_id`` when given) plus the top approved
         memories. The prompt follows the spec §25 pattern with a SYSTEM
         tutorial-writer persona, OPTIONAL MEMORY and KNOWLEDGE sections (each
-        included only when non-empty), and the USER REQUEST. A light post-check
-        warns — never raises — when ``# Objetivo`` or ``# Fuentes`` is missing
-        from the LLM output.
+        included only when non-empty), and the USER REQUEST. ``mode`` selects
+        the depth block appended to the persona: ``do`` (concrete steps),
+        ``learn`` (steps + per-step rationale + prerequisites) or
+        ``deep_learn`` (theory + practice + exercises + self-evaluation); the
+        requested mode is echoed on the result. A light post-check warns —
+        never raises — when ``# Objetivo`` or ``# Fuentes`` is missing from
+        the LLM output.
 
         This method is pure: call :meth:`persist` to write the tutorial into
         the vault and the index.
@@ -131,7 +182,7 @@ class TutorialService:
             knowledge_block = f"KNOWLEDGE\n{knowledge}\n\n"
 
         messages = [
-            ChatMessage(role="system", content=_SYSTEM_PROMPT),
+            ChatMessage(role="system", content=f"{_SYSTEM_PROMPT}\n\n{_mode_block(mode)}"),
             ChatMessage(
                 role="user",
                 content=f"{memory_block}{knowledge_block}USER REQUEST\n{objective}",
@@ -170,6 +221,7 @@ class TutorialService:
             file_path=None,
             content=markdown,
             sources=[TutorialSource(title=hit.title, score=hit.score) for hit in hits],
+            mode=mode,
             warnings=warnings or None,
         )
 
