@@ -176,6 +176,11 @@ POST /v1/chat/completions    → grounded answer + **Fuentes** block (+ SSE stre
 3. API key: any non-empty value (PKA has no auth in v1; LAN personal server).
 4. The `my-notebooklm` model appears in the model picker.
 
+**Web research from the chat**: messages that ask to search the web
+("investigá en la web…", "buscá fuentes…") are detected and routed to the
+research agent: the fresh report is persisted to the vault and returned in the
+reply (synchronous; a run takes ~1–3 minutes).
+
 **Guard rule:** Open WebUI is a *client*. Do NOT enable its own knowledge/RAG
 or upload documents there — knowledge and memory must live only in PKA
 (no split memory, spec §7/§42).
