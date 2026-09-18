@@ -20,6 +20,7 @@ from app.core.config import Settings
 from app.domain.models import (  # noqa: F401  (register tables on Base.metadata)
     Base,
     document,
+    memory,
     project,
     usage,
 )

@@ -23,6 +23,8 @@ from app.vector import qdrant as qdrant_module
 from app.vector.collections import (
     DEFAULT_COLLECTION,
     DOCUMENT_ID_FIELD,
+    MEMORIES_COLLECTION,
+    MEMORY_ID_FIELD,
     PROJECT_ID_FIELD,
 )
 from app.vector.qdrant import QdrantVectorStore, SearchHit, VectorPoint
@@ -199,9 +201,67 @@ async def test_delete_by_document_uses_payload_filter() -> None:
     call = next(c for c in fake.calls if c[0] == "delete")
     selector = call[2]["points_selector"]
     assert isinstance(selector, FilterSelector)
+    assert call[2]["collection_name"] == DEFAULT_COLLECTION
     assert selector.filter.must == [
         FieldCondition(key=DOCUMENT_ID_FIELD, match=MatchValue(value="doc-9"))
     ]
+
+
+async def test_delete_by_field_uses_given_field() -> None:
+    fake = FakeQdrantClient()
+    store = QdrantVectorStore(
+        url="http://localhost:6333", client=fake, collection=MEMORIES_COLLECTION
+    )
+
+    await store.delete_by_field(MEMORY_ID_FIELD, "mem-9")
+
+    call = next(c for c in fake.calls if c[0] == "delete")
+    selector = call[2]["points_selector"]
+    assert isinstance(selector, FilterSelector)
+    assert call[2]["collection_name"] == MEMORIES_COLLECTION
+    assert call[2]["wait"] is True
+    assert selector.filter.must == [
+        FieldCondition(key=MEMORY_ID_FIELD, match=MatchValue(value="mem-9"))
+    ]
+
+
+async def test_delete_by_document_aliases_delete_by_field() -> None:
+    fake = FakeQdrantClient()
+    store = QdrantVectorStore(url="http://localhost:6333", client=fake)
+
+    await store.delete_by_document("doc-9")
+    await store.delete_by_field(DOCUMENT_ID_FIELD, "doc-9")
+
+    deletes = [c for c in fake.calls if c[0] == "delete"]
+    assert len(deletes) == 2
+    first, second = deletes
+    assert first[2]["points_selector"] == second[2]["points_selector"]
+    assert first[2]["collection_name"] == second[2]["collection_name"]
+
+
+async def test_all_operations_are_scoped_to_the_configured_collection() -> None:
+    fake = FakeQdrantClient()
+    store = QdrantVectorStore(
+        url="http://localhost:6333", client=fake, collection=MEMORIES_COLLECTION
+    )
+
+    await store.ensure_collection(size=64)
+    await store.upsert_chunks(
+        [VectorPoint(id="mem-1", vector=[0.1], payload={"memory_id": "mem-1"})]
+    )
+    await store.search([0.1], top_k=2)
+    await store.delete_by_field(MEMORY_ID_FIELD, "mem-1")
+
+    assert (
+        next(c for c in fake.calls if c[0] == "create_collection")[2]["collection_name"]
+        == MEMORIES_COLLECTION
+    )
+    assert next(c for c in fake.calls if c[0] == "upsert")[2]["collection_name"] == MEMORIES_COLLECTION
+    assert (
+        next(c for c in fake.calls if c[0] == "query_points")[2]["collection_name"]
+        == MEMORIES_COLLECTION
+    )
+    assert next(c for c in fake.calls if c[0] == "delete")[2]["collection_name"] == MEMORIES_COLLECTION
 
 
 async def test_close_closes_the_client() -> None:

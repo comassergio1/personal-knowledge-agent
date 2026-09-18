@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.providers.embeddings.base import EmbeddingProvider
 from app.providers.llm.base import LLMProvider
+from app.repositories.memory_repository import MemoryRepository
 from app.repositories.usage_repository import UsageRepository
 from app.services.chat_service import ChatService
 from app.services.ingestion_service import IngestionService
@@ -68,6 +69,11 @@ def get_llm(request: Request) -> LLMProvider:
 def get_usage_repository(request: Request) -> UsageRepository:
     """Return the app-scoped usage repository from ``app.state``."""
     return request.app.state.usage_repository
+
+
+def get_memory_repository(request: Request) -> MemoryRepository:
+    """Return the app-scoped memory repository from ``app.state``."""
+    return request.app.state.memory_repository
 
 
 def get_vault_service(request: Request) -> VaultService:

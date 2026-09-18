@@ -54,29 +54,40 @@ class SearchHit:
 
 
 class QdrantVectorStore:
-    """Thin async wrapper over ``AsyncQdrantClient`` for the default collection."""
+    """Thin async wrapper over ``AsyncQdrantClient`` for one collection.
 
-    def __init__(self, url: str, *, client: AsyncQdrantClient | None = None) -> None:
+    ``collection`` selects the target collection (default ``knowledge`` for
+    chunks; memories use ``memories``), and every operation is scoped to it.
+    """
+
+    def __init__(
+        self,
+        url: str,
+        *,
+        client: AsyncQdrantClient | None = None,
+        collection: str = DEFAULT_COLLECTION,
+    ) -> None:
         self._url = url
+        self._collection = collection
         self._client = client if client is not None else AsyncQdrantClient(url=url)
 
     async def ensure_collection(self, size: int) -> None:
         """Create the collection if missing, with keyword indexes on common filter fields."""
-        if await self._client.collection_exists(DEFAULT_COLLECTION):
+        if await self._client.collection_exists(self._collection):
             return
         # on_disk=True suits a home server: vectors live on disk, not RAM.
         await self._client.create_collection(
-            collection_name=DEFAULT_COLLECTION,
+            collection_name=self._collection,
             vectors_config=VectorParams(size=size, distance=Distance.COSINE, on_disk=True),
             on_disk_payload=True,
         )
         await self._client.create_payload_index(
-            collection_name=DEFAULT_COLLECTION,
+            collection_name=self._collection,
             field_name=DOCUMENT_ID_FIELD,
             field_schema=PayloadSchemaType.KEYWORD,
         )
         await self._client.create_payload_index(
-            collection_name=DEFAULT_COLLECTION,
+            collection_name=self._collection,
             field_name=PROJECT_ID_FIELD,
             field_schema=PayloadSchemaType.KEYWORD,
         )
@@ -84,7 +95,7 @@ class QdrantVectorStore:
     async def upsert_chunks(self, points: list[VectorPoint]) -> None:
         """Map our ``VectorPoint`` list to qdrant ``PointStruct`` and upsert."""
         await self._client.upsert(
-            collection_name=DEFAULT_COLLECTION,
+            collection_name=self._collection,
             points=[
                 PointStruct(id=p.id, vector=p.vector, payload=p.payload) for p in points
             ],
@@ -112,7 +123,7 @@ class QdrantVectorStore:
             )
         query_filter = Filter(must=conditions) if conditions else None
         response = await self._client.query_points(
-            collection_name=DEFAULT_COLLECTION,
+            collection_name=self._collection,
             query=embedding,
             query_filter=query_filter,
             limit=top_k,
@@ -134,19 +145,27 @@ class QdrantVectorStore:
             )
         return hits
 
-    async def delete_by_document(self, document_id: str) -> None:
-        """Delete every point whose payload ``document_id`` matches."""
+    async def delete_by_field(self, field: str, value: str) -> None:
+        """Delete every point whose payload ``field`` equals ``value``.
+
+        Generalized deletion helper: documents delete on ``document_id`` and
+        memories on ``memory_id``, both scoped to this store's collection.
+        """
         await self._client.delete(
-            collection_name=DEFAULT_COLLECTION,
+            collection_name=self._collection,
             points_selector=FilterSelector(
                 filter=Filter(
                     must=[
-                        FieldCondition(key=DOCUMENT_ID_FIELD, match=MatchValue(value=document_id))
+                        FieldCondition(key=field, match=MatchValue(value=value))
                     ]
                 )
             ),
             wait=True,
         )
+
+    async def delete_by_document(self, document_id: str) -> None:
+        """Delete every point whose payload ``document_id`` matches (alias)."""
+        await self.delete_by_field(DOCUMENT_ID_FIELD, document_id)
 
     async def close(self) -> None:
         """Close the underlying qdrant client."""
