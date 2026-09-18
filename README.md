@@ -1,4 +1,8 @@
-# Personal Knowledge Agent (PKA)
+# My NotebookLM — Personal Learning & Knowledge System
+
+> Private, self-hosted NotebookLM oriented to **learning by doing**: your
+> knowledge and your memory stay yours, and the LLM is a swappable engine.
+> (Technical package/repo name: `personal-knowledge-agent`.)
 
 Self-hosted personal knowledge OS: conversational chat, persistent personal memory,
 semantic search, and RAG over your own documents.
@@ -9,16 +13,16 @@ The application owns Conversations, Documents, Knowledge, Memories, Embeddings,
 Research, Projects, and Evals. LLM providers (Ollama, PayPerQ, OpenCode Go) only
 provide inference — switching providers never loses or touches your data.
 
-**Current status: Fase 8 — evals.**
+**Current status: Fase 7 — Learning Engine (product pivot).**
 
-Everything from Fase 6, plus a **knowledge-QA evaluation harness** (spec §31/§32):
-`POST /evals/run` scores the grounded chat on `correctness`, `relevance`,
-`groundedness`, `hallucination` and `source_quality` with an LLM judge, and
-adversarial cases verify the agent disputes false premises (the VLAN 50-vs-30
-case passes live). Running the evals surfed two real defects already fixed:
-duplicated ingests degraded retrieval recall (fixed with content-hash
-idempotency) and the judge was grading against 200-char excerpts (now full
-chunk text). Coding-agent integration (Fase 7) remains.
+Everything from Fase 8, plus the learning core the new product doc asked for:
+tutorials with **depth modes** (`do` / `learn` / `deep_learn`), the orchestrated
+**learning loop** (`POST /learn/run`: assess your knowledge → research the web
+only when it's missing → generate the tutorial), **`POST /learn/reflect`**
+("¿qué aprendí?" → memory candidates) and **`GET /knowledge/map`** ("¿qué sé
+sobre X?" → hierarchical map of concepts, tutorials, experiences and gaps).
+The coding-agent/OpenCode integration left the core and is now an optional
+future plugin.
 
 ## Architecture
 
@@ -105,10 +109,13 @@ with any tool — Obsidian works out of the box:
 | POST | `/vault/sync` | Scan the vault: create/update/delete rows+vectors to match files |
 | POST | `/chat` | `{"message": "...", "top_k": 5, "document_id": "...", "project_id": "..."}` → grounded answer + sources |
 | POST | `/memories/extract` | `{"conversation": [{"role", "content"}...]}` → candidate memories (redacted) |
-| POST | `/tutorials/generate` | `{"objective": "...", "project_id": "...", "title": "..."}` → Spanish step-by-step tutorial written to the vault + indexed |
+| POST | `/tutorials/generate` | `{"objective": "...", "mode": "do|learn|deep_learn", "project_id": "..."}` → depth-aware Spanish tutorial written to the vault + indexed |
 | POST | `/research/run` | `{"question": "...", "project_id": "...", "max_sources": 6}` → Spanish research report with cited sources, saved to the vault (SearXNG + trafilatura) |
 | POST | `/evals/run` | `{"dataset": [{"question", "expected_facts", "adversarial"}...]}` → per-case metrics + verdicts (spec §31/§32) |
 | GET | `/evals/runs` | Eval history (newest first) |
+| POST | `/learn/run` | `{"goal": "...", "mode": "do|learn|deep_learn", "allow_research": true}` → assess → research on demand → tutorial (the learning loop) |
+| POST | `/learn/reflect` | `{"goal": "...", "what_i_learned": "..."}` → candidate memories ("¿qué aprendí?") |
+| GET | `/knowledge/map` | `?topic=` → hierarchical map of what you know about a topic (concepts, tutorials, experiences, gaps) |
 | GET | `/memories` · `/{id}` | List (`?type=`/`?status=`) / get memories |
 | POST | `/memories/{id}/approve` · `/reject` | Validation gate: approve stores vector + Obsidian mirror |
 | DELETE | `/memories/{id}` | Remove memory (row + vector + mirror) |
@@ -125,6 +132,38 @@ curl -X POST http://localhost:8000/api/v1/chat \
   -H 'Content-Type: application/json' \
   -d '{"message": "¿Cómo configuramos las VLANs en mi MikroTik?"}'
 ```
+
+## Learning (Fase 7 — the core of the product)
+
+The product pivot (`My notebook lm.md`) makes **learning** the center and
+chat/coding secondary:
+
+- **Tutorial depth modes** — `POST /tutorials/generate` accepts `mode`:
+  `do` (concrete steps only), `learn` (steps + Conceptos previos + per-step
+  “¿Por qué hacemos esto?”), `deep_learn` (theory, concepts, exercises,
+  self-evaluation). The structure grows with the mode; content stays Spanish.
+- **The learning loop** — `POST /learn/run {goal, mode}`:
+  own knowledge is assessed first (retrieval score vs `research_threshold`);
+  when it is insufficient **and** `allow_research`, the research agent goes to
+  the web first (its report lands in the vault and is indexed), and the
+  tutorial is then generated grounded on both. Returns
+  `needs_research`, the research reference and the tutorial.
+- **“¿Qué aprendí?”** — `POST /learn/reflect {goal, what_i_learned}` runs the
+  reflection through the memory extractor, producing **candidate memories**
+  (approve them to keep them; they feed future prompts as MEMORY).
+- **Knowledge map** — `GET /knowledge/map?topic=` aggregates approved memories
+  and your documents around a topic and builds a hierarchical map
+  (`Conceptos`, `Tutoriales`, `Experiencias`, `Recursos`, `Huecos`), citing
+  your own material and calling out what is missing.
+
+## Integrations (optional, future)
+
+- **Coding agent (OpenCode headless)** — deferred out of the core by the
+  product pivot. The design stays documented: PKA builds the specification +
+  context (knowledge, project, memories) and a `CodingAgent` adapter would run
+  `opencode run` against a bounded repository, returning the result as a memory
+  candidate. Pi remains the interactive desk harness; nothing of this is
+  required for the learning product.
 
 ## Switching providers
 
@@ -258,16 +297,17 @@ uv run ruff check app tests
 
 ```
 app/
-  api/routes/      chat · documents · health · memories · projects · sync
-                   · tutorials · usage
+  api/routes/      chat · documents · health · knowledge · learn · memories
+                   · projects · research · sync · tutorials · usage · evals
   core/            config (pydantic-settings) · logging
   domain/models/   Document · Chunk · Project · Memory · LLMUsage (SQLAlchemy 2.0)
   providers/       llm/ (base · ollama · payperq · opencode_go · factory)
                    embeddings/ (base · ollama · factory)
   repositories/    document · project · memory · usage
-  schemas/         document · chat · project · memory · eval · sync · tutorial · usage
-  services/        chunking · ingestion · retrieval · chat · eval · memory · research
-                   redaction · sync · tutorial · vault
+  schemas/         document · chat · project · memory · eval · learn · sync
+                   · research · tutorial · usage
+  services/        chunking · ingestion · retrieval · chat · eval · knowledge_map
+                   · learn · memory · research · redaction · sync · tutorial · vault
   providers/       llm/ · embeddings/ · search/ (searxng)
   vector/          qdrant store (knowledge + memories) · collections constants
 examples/          sample knowledge document
@@ -277,9 +317,8 @@ odd/tasks/         feature tracking (vertical-slice, phase2-5)
 
 ## Roadmap
 
-Fase 1 vertical slice ✔ → Fase 2 multi-provider ✔ → Fase 3 knowledge vault +
-projects + PDF ✔ → Fase 4 memory ✔ → Fase 5 tutorials ✔ → Fase 6 research
-agent ✔ → Fase 8 evals (surfaced + fixed two defects) ✔ → Fase 7 coding-agent
-integration (OpenCode headless behind a `CodingAgent` interface — user
-decision 2026-09-18: Pi stays the interactive desk harness; `opencode run` is
-the server-invoked worker) → LangGraph when stateful flows demand it.
+Fases 1–6 ✔ (slice, multi-provider, vault/projects/PDF, memory, tutorials,
+research) → Fase 8 ✔ (evals — surfaced and fixed two real defects) → **Fase 7 ✔
+Learning Engine** (depth modes, learn loop, reflect, knowledge map) → LangGraph
+when stateful flows demand it. The coding-agent/OpenCode adapter is an
+**optional future integration**, no longer a core phase.

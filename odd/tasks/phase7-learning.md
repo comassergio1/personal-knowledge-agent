@@ -3,7 +3,7 @@
 **Project**: My NotebookLM — Personal Learning & Knowledge System (technical package name keeps `personal-knowledge-agent`; user decision 2026-09-18 to rebrand docs, keep the repo name).
 **Spec source**: `Memoria local rag/My notebook lm.md` (product change: learning-by-doing core; coding-agent/OpenCode moved OUT of the core pillars to an optional future integration) + `Personal Knowledge Agent.md` (§20 tutorials, §21/§22 research).
 **Branch policy**: commits on `main`.
-**Status**: in_progress
+**Status**: done — Learning Engine core, rebranded My NotebookLM (2026-09-18)
 
 ## Scope (Phase 7 — Learning Engine)
 
@@ -41,7 +41,7 @@
 | 3 | `LearnService.reflect` (¿qué aprendí? → memory candidates) + tests | done | d9db528 |
 | 4 | `KnowledgeMapService` + `GET /knowledge/map` + tests | in_progress | |
 | 5 | Routes + wiring (tutorials mode, learn, knowledge-map) + integration tests | in_progress | |
-| 6 | Rebrand README (My NotebookLM) + Live E2E (full learn cycle w/ research + reflect + map) | pending | |
+| 6 | Rebrand README (My NotebookLM) + Live E2E (full learn cycle w/ research + reflect + map) | done | 4299185 + docs |
 
 ## Acceptance criteria
 
@@ -52,3 +52,13 @@
 ## Evidence
 
 - `d9db528` feat: tutorial depth modes and learning-loop orchestrator (tasks 1–3).
+- `4299185` feat: knowledge map and learning routes/wiring (tasks 4–5).
+
+### Live E2E (task 6, real stack — OpenCode Go)
+
+- `POST /learn/run` "Quiero entender cómo funciona una VPN" (mode=learn): `needs_research=False` (own knowledge sufficed), tutorial `home-lab/quiero-entender-como-funciona-una-vpn.md` with the full learn structure (Conceptos previos, Preparación, per-step “¿Por qué hacemos esto?”).
+- Threshold-forced run (research_threshold=0.95): `needs_research=True` → research report `...-seguridad-en-redes-domest.md` in the vault → tutorial grounded on the researched content (sources 0.74–0.80) — the gap → web → tutorial leg works.
+- `POST /learn/reflect` → 4 memory candidates (preference + semantic VPN facts — “¿qué aprendí?” → memory).
+- `GET /knowledge/map?topic=redes` → hierarchical Spanish map with Conceptos/Tutoriales/Huecos, citing own material and honestly flagging gaps.
+- Rebrand: README now My NotebookLM — Personal Learning & Knowledge System (repo name unchanged).
+- Follow-up notado: el mapa a veces ve líneas de conocimiento recortadas (slices de 300 chars) y lo reporta como “vacíos/truncados” — revisar tamaño del slice / calidad de la agregación.
