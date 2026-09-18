@@ -9,16 +9,15 @@ The application owns Conversations, Documents, Knowledge, Memories, Embeddings,
 Research, Projects, and Evals. LLM providers (Ollama, PayPerQ, OpenCode Go) only
 provide inference — switching providers never loses or touches your data.
 
-**Current status: Fase 5 — tutorial generator.**
+**Current status: Fase 6 — research agent.**
 
-Documents live in an Obsidian-compatible vault, projects organize knowledge,
-PDFs are ingested, the agent **learns** memory with a candidate/approve cycle,
-and `POST /tutorials/generate` now writes grounded Spanish step-by-step
-tutorials (spec §20 structure: Objetivo → Fuentes) adapted to your retrieved
-knowledge, project, and memory preferences — each tutorial lands in the vault
-as an editable note and is indexed immediately. Three LLM providers live with
-cost accounting. Research agent, evals, and the coding-agent integration are
-later phases.
+Everything from Fase 5, plus a **self-hosted research agent**: SearXNG (Docker)
+searches the web without third-party keys, trafilatura extracts page text
+locally, and `POST /research/run` writes a Spanish report (Objetivo/Resumen/
+Hallazgos con citas `[n]`/Contradicciones/Conclusión/Fuentes) into the vault,
+indexed immediately. Tutorial engine, memory, projects, PDF ingestion, three
+LLM providers with cost accounting all live. Evals and the coding-agent
+integration are later phases.
 
 ## Architecture
 
@@ -106,6 +105,7 @@ with any tool — Obsidian works out of the box:
 | POST | `/chat` | `{"message": "...", "top_k": 5, "document_id": "...", "project_id": "..."}` → grounded answer + sources |
 | POST | `/memories/extract` | `{"conversation": [{"role", "content"}...]}` → candidate memories (redacted) |
 | POST | `/tutorials/generate` | `{"objective": "...", "project_id": "...", "title": "..."}` → Spanish step-by-step tutorial written to the vault + indexed |
+| POST | `/research/run` | `{"question": "...", "project_id": "...", "max_sources": 6}` → Spanish research report with cited sources, saved to the vault (SearXNG + trafilatura) |
 | GET | `/memories` · `/{id}` | List (`?type=`/`?status=`) / get memories |
 | POST | `/memories/{id}/approve` · `/reject` | Validation gate: approve stores vector + Obsidian mirror |
 | DELETE | `/memories/{id}` | Remove memory (row + vector + mirror) |
@@ -149,6 +149,26 @@ the `personal-knowledge-agent/0.1.0` User-Agent (per the provider docs);
 `gpt-5.6-luna`/`grok-4.6` use the Responses API and are out of scope. All three
 providers were validated live (Fase 2). A fallback provider chain (primary →
 fallback, spec §29) is a planned enhancement.
+
+## Research (Fase 6)
+
+`POST /research/run` answers open web questions with a **Spanish report with
+citations** (spec §21): it turns the question into 2–4 search queries (LLM),
+queries **SearXNG** (self-hosted Docker service, no API keys — JSON format
+enabled in `config/searxng/settings.yml`), dedupes by URL, ranks sources by a
+quality heuristic (official docs/GitHub > tech sites > forums), extracts each
+page's main text with **trafilatura** (fallback: search snippet), and has the
+LLM synthesize a report:
+
+- `# Objetivo` · `# Resumen` · `# Hallazgos` (findings cite `[n]`)
+- `# Contradicciones detectadas` (explicit cross-source conflicts)
+- `# Conclusión` · `# Fuentes` (title — URL — fecha de consulta)
+
+The report is written to the vault (project folder or `inbox`) and indexed
+immediately; re-read it with `GET /documents/{id}`. With SearXNG down the
+endpoint answers 503 cleanly and the rest of the app keeps working. Turning
+findings into long-term facts stays manual via `POST /memories/extract`
+(spec §22: no automatic knowledge pollution).
 
 ## Tutorials (Fase 5)
 
@@ -224,7 +244,8 @@ app/
   repositories/    document · project · memory · usage
   schemas/         document · chat · project · memory · sync · tutorial · usage
   services/        chunking · ingestion · retrieval · chat · memory · redaction
-                   sync · tutorial · vault
+                   research · sync · tutorial · vault
+  providers/       llm/ · embeddings/ · search/ (searxng)
   vector/          qdrant store (knowledge + memories) · collections constants
 examples/          sample knowledge document
 scripts/           smoke_e2e.py
@@ -235,5 +256,6 @@ odd/tasks/         feature tracking (vertical-slice, phase2-5)
 
 Fase 1 vertical slice ✔ → Fase 2 multi-provider ✔ → Fase 3 knowledge vault +
 projects + PDF ✔ → Fase 4 memory (extraction + approval + chat) ✔ → Fase 5
-tutorial generator ✔ → research agent → coding-agent integration → evals →
-LangGraph workflows when stateful multi-step flows demand it.
+tutorial generator ✔ → Fase 6 research agent (SearXNG + trafilatura + citas) ✔
+→ coding-agent integration → evals → LangGraph workflows when stateful
+multi-step flows demand it.

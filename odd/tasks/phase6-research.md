@@ -3,7 +3,7 @@
 **Project**: Personal Knowledge Agent (PKA).
 **Spec source**: `Personal Knowledge Agent.md`, sections 21–22.
 **Branch policy**: commits on `main`.
-**Status**: in_progress
+**Status**: done — self-hosted research with citations (2026-09-18)
 
 ## Scope (Phase 6, user-shaped 2026-09-18)
 
@@ -42,7 +42,7 @@
 | 5 | `ResearchService`: interpret → search → dedupe → rank → extract → synthesize → persist | in_progress | |
 | 6 | `POST /research/run` + schemas + wiring | in_progress | |
 | 7 | Tests: provider parse, extract, service flow (fakes), route, persist | in_progress | |
-| 8 | Live E2E (real SearXNG + trafilatura + LLM) + README | pending | |
+| 8 | Live E2E (real SearXNG + trafilatura + LLM) + README | done | 96bf048 + docs |
 
 ## Acceptance criteria
 
@@ -52,3 +52,11 @@
 ## Evidence
 
 - `3aea837` feat: SearXNG search provider and trafilatura extraction (tasks 1–4).
+- `f2ab2c7` feat: research agent orchestration and /research/run (tasks 5–7).
+- `96bf048` fix: valid SearXNG settings (use_default_settings + secret_key) — the first settings.yml crashed the container; verified by loading the exact `init_settings` path in the image before applying.
+
+### Live verification (task 8, real stack)
+
+- SearXNG container up (HTTP 200; only optional engines ahmia/torch fail to register).
+- `POST /research/run` "Cómo configurar OpenWrt como access point" (project Home Lab) → 201; report `home-lab/como-configurar-openwrt-como-access-point-en-una-red-domest.md` in the vault; 5 real sources (Reddit threads) with domains/snippets; all six §21 headers (Objetivo/Resumen/Hallazgos/Contradicciones detectadas/Conclusión/Fuentes).
+- Nota de tuning: la búsqueda en español devolvió sobre todo hilos de Reddit (tier 1 del ranking); para documentos oficiales convendría consultas en inglés o más engines — follow-up.
