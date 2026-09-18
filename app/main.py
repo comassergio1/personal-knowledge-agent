@@ -14,7 +14,9 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -79,6 +81,19 @@ from app.vector.qdrant import QdrantVectorStore, SearchHit, VectorPoint
 
 APP_TITLE = "Personal Knowledge Agent"
 APP_VERSION = "0.1.0"
+
+# Own console (feature: own-console): the zero-dependency static SPA lives in
+# the package and is served by the app itself — no build step, no CDN, so it
+# works offline inside the LAN compose stack.
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+_console_router = APIRouter()
+
+
+@_console_router.get("/", include_in_schema=False)
+async def console_index() -> FileResponse:
+    """Serve the own-console single-page app (feature: own-console)."""
+    return FileResponse(_STATIC_DIR / "index.html")
 
 _logger = get_logger("application")
 
@@ -511,4 +526,9 @@ def create_app(settings: Settings | None = None, *, testing: bool = False) -> Fa
     app.include_router(sync_router, prefix="/api/v1")
     app.include_router(tutorials_router, prefix="/api/v1")
     app.include_router(usage_router, prefix="/api/v1")
+    # Own console: the index route and the static mount are registered AFTER
+    # every API router (and the /v1 OpenAI-compatible surface), so they can
+    # never shadow /api/v1/* or /v1/*.
+    app.include_router(_console_router)
+    app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
     return app

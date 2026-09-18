@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>My NotebookLM</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>My NotebookLM</h1>
+    <nav class="tabs" role="tablist">
+      <button type="button" class="tab active" data-tab="chat" role="tab" aria-selected="true">Chat</button>
+      <button type="button" class="tab" data-tab="learn" role="tab" aria-selected="false">Aprender</button>
+      <button type="button" class="tab" data-tab="memories" role="tab" aria-selected="false">Memorias</button>
+      <button type="button" class="tab" data-tab="vault" role="tab" aria-selected="false">Vault</button>
+      <button type="button" class="tab" data-tab="map" role="tab" aria-selected="false">Mapa</button>
+    </nav>
+  </header>
+
+  <div id="error-banner" class="banner banner-error hidden" role="alert">
+    <span id="error-banner-text"></span>
+  </div>
+
+  <main id="app">
+    <section id="panel-tab-chat" class="panel" data-panel="chat">
+      <h2>Chat</h2>
+      <form id="chat-form">
+        <textarea id="chat-message" rows="4" placeholder="Preguntale a tus notas..."></textarea>
+        <div class="form-row">
+          <label for="chat-top-k">Fuentes (top_k)</label>
+          <input id="chat-top-k" type="number" min="1" max="20" value="5">
+          <button id="chat-send" type="submit">Preguntar</button>
+        </div>
+      </form>
+      <div id="chat-output" class="output hidden">
+        <h3>Respuesta</h3>
+        <article id="chat-answer" class="content"></article>
+        <h3>Fuentes</h3>
+        <ul id="chat-sources" class="sources"></ul>
+      </div>
+    </section>
+
+    <section id="panel-tab-learn" class="panel hidden" data-panel="learn">
+      <h2>Aprender</h2>
+      <form id="learn-form">
+        <label for="learn-goal">Objetivo</label>
+        <input id="learn-goal" type="text" placeholder="Ej.: Aprender VLANs 802.1Q">
+        <div class="form-row">
+          <label for="learn-mode">Modo</label>
+          <select id="learn-mode">
+            <option value="do">Hacer (do)</option>
+            <option value="learn" selected>Entender (learn)</option>
+            <option value="deep_learn">Profundo (deep_learn)</option>
+          </select>
+          <label class="checkbox">
+            <input id="learn-allow-research" type="checkbox" checked>
+            Permitir investigación web
+          </label>
+          <button id="learn-run" type="submit">Generar tutorial</button>
+        </div>
+      </form>
+      <div id="learn-output" class="output hidden">
+        <div class="result-line">Estado: <span id="learn-needs-research"></span></div>
+        <div class="result-line">Ruta en el vault: <code id="learn-file-path"></code></div>
+        <div class="result-line">Informe de investigación: <code id="learn-research-path"></code></div>
+        <h3>Tutorial</h3>
+        <article id="learn-tutorial" class="content"></article>
+        <h3>Fuentes del tutorial</h3>
+        <ul id="learn-sources" class="sources"></ul>
+        <p id="learn-reflect-hint" class="muted"></p>
+      </div>
+    </section>
+
+    <section id="panel-tab-memories" class="panel hidden" data-panel="memories">
+      <h2>Memorias</h2>
+      <div class="form-row">
+        <label for="memory-type">Tipo</label>
+        <select id="memory-type">
+          <option value="">Todos</option>
+          <option value="semantic">Semántica</option>
+          <option value="episodic">Episódica</option>
+          <option value="procedural">Procedural</option>
+          <option value="preference">Preferencia</option>
+        </select>
+        <label for="memory-status">Estado</label>
+        <select id="memory-status">
+          <option value="">Todos</option>
+          <option value="candidate">Candidata</option>
+          <option value="approved">Aprobada</option>
+          <option value="rejected">Rechazada</option>
+        </select>
+        <button id="memories-reload" type="button" class="secondary">Actualizar</button>
+      </div>
+      <div id="memories-list"></div>
+
+      <h3>Extraer de conversación</h3>
+      <form id="extract-form">
+        <textarea id="extract-conversation" rows="4"
+          placeholder="Una línea por turno de usuario. Ej.:&#10;prefiero respuestas concisas&#10;uso docker compose para levantar servicios"></textarea>
+        <button id="extract-run" type="submit">Extraer candidatas</button>
+      </form>
+      <div id="extract-output" class="output hidden">
+        <h4>Candidatas detectadas</h4>
+        <ul id="extract-candidates"></ul>
+      </div>
+    </section>
+
+    <section id="panel-tab-vault" class="panel hidden" data-panel="vault">
+      <h2>Vault</h2>
+
+      <h3>Subir documento</h3>
+      <form id="upload-form">
+        <div class="form-row">
+          <input id="upload-file" type="file" accept=".md,.markdown,.txt,.pdf">
+          <input id="upload-title" type="text" placeholder="Título (opcional)">
+          <button id="upload-submit" type="submit">Subir</button>
+        </div>
+      </form>
+
+      <div class="form-row">
+        <h3>Documentos</h3>
+        <button id="documents-reload" type="button" class="secondary">Actualizar</button>
+      </div>
+      <table id="documents-table">
+        <thead>
+          <tr><th>Título</th><th>Tipo</th><th>Estado</th><th>Acciones</th></tr>
+        </thead>
+        <tbody id="documents-list"></tbody>
+      </table>
+
+      <h3>Anexar sección</h3>
+      <form id="append-form">
+        <div class="form-row">
+          <select id="append-document"></select>
+          <input id="append-section" type="text" placeholder="Sección (ej.: Conceptos previos)">
+        </div>
+        <textarea id="append-text" rows="4" placeholder="Texto de la sección a anexar..."></textarea>
+        <button id="append-submit" type="submit">Anexar y reindexar</button>
+      </form>
+    </section>
+
+    <section id="panel-tab-map" class="panel hidden" data-panel="map">
+      <h2>Mapa de conocimiento</h2>
+      <form id="map-form">
+        <div class="form-row">
+          <input id="map-topic" type="text" placeholder="Tema (ej.: VLANs)">
+          <button id="map-run" type="submit">Generar mapa</button>
+        </div>
+      </form>
+      <div id="map-output" class="output hidden">
+        <h3>Mapa</h3>
+        <article id="map-content" class="content"></article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="muted">My NotebookLM · consola local sobre /api/v1 · v1 sin autenticación (red local)</footer>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
