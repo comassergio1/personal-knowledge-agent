@@ -28,6 +28,8 @@ from app.api.routes.chat import router as chat_router
 from app.api.routes.documents import router as documents_router
 from app.api.routes.evals import router as evals_router
 from app.api.routes.health import router as health_router
+from app.api.routes.knowledge import router as knowledge_router
+from app.api.routes.learn import router as learn_router
 from app.api.routes.memories import router as memories_router
 from app.api.routes.projects import router as projects_router
 from app.api.routes.research import router as research_router
@@ -54,6 +56,8 @@ from app.services.chat_service import ChatService
 from app.services.eval_metrics import JUDGE_PROMPT_MARKER
 from app.services.eval_service import EvalService
 from app.services.ingestion_service import IngestionService
+from app.services.knowledge_map import KnowledgeMapService
+from app.services.learn_service import LearnService
 from app.services.memory_extractor import MemoryExtractor
 from app.services.memory_service import MemoryService
 from app.services.research_service import ResearchService
@@ -418,6 +422,23 @@ def _make_lifespan(
         )
         app.state.search_provider = search_provider
 
+        # Phase 7 learning services: the loop reuses the existing research and
+        # tutorial instances (so the testing seam's fake search stays offline)
+        # and the map layers over memory + retrieval + the LLM. Both only
+        # reference shared components and own no resources to close.
+        app.state.learn_service = LearnService(
+            retrieval_service,
+            app.state.research_service,
+            app.state.tutorial_service,
+            memory=memory_service,
+        )
+        app.state.knowledge_map_service = KnowledgeMapService(
+            memory_service,
+            retrieval_service,
+            llm,
+            settings,
+        )
+
         # Eval runs their own app-lifetime session, mirroring the other
         # repositories; the judge reuses the shared LLM provider.
         eval_session = session_factory()
@@ -480,6 +501,8 @@ def create_app(settings: Settings | None = None, *, testing: bool = False) -> Fa
     app.include_router(documents_router, prefix="/api/v1")
     app.include_router(evals_router, prefix="/api/v1")
     app.include_router(health_router, prefix="/api/v1")
+    app.include_router(knowledge_router, prefix="/api/v1")
+    app.include_router(learn_router, prefix="/api/v1")
     app.include_router(memories_router, prefix="/api/v1")
     app.include_router(projects_router, prefix="/api/v1")
     app.include_router(research_router, prefix="/api/v1")

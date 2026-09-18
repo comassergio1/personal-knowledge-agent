@@ -102,3 +102,14 @@ def test_generate_provider_error_is_502(test_app: TestClient) -> None:
 
     assert response.status_code == 502
     assert "ollama exploded" in response.json()["detail"]
+
+
+def test_generate_tutorial_respects_requested_mode(test_app: TestClient) -> None:
+    """Phase 7: the requested depth is passed to the service and echoed back."""
+    response = test_app.post(
+        "/api/v1/tutorials/generate",
+        json={"objective": "Redes VLANs", "mode": "deep_learn"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["mode"] == "deep_learn"

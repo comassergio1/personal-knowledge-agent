@@ -36,11 +36,11 @@
 
 | # | Task | Status | Commit |
 |---|------|--------|--------|
-| 1 | Tutorial `mode` (do/learn/deep_learn): prompt variants + structure + tests | pending | |
-| 2 | `LearnService.run` loop (assess → research on-demand → tutorial) + tests | pending | |
-| 3 | `LearnService.reflect` (¿qué aprendí? → memory candidates) + tests | pending | |
-| 4 | `KnowledgeMapService` + `GET /knowledge/map` + tests | pending | |
-| 5 | Routes + wiring (tutorials mode, learn, knowledge-map) + integration tests | pending | |
+| 1 | Tutorial `mode` (do/learn/deep_learn): prompt variants + structure + tests | done | d9db528 |
+| 2 | `LearnService.run` loop (assess → research on-demand → tutorial) + tests | done | d9db528 |
+| 3 | `LearnService.reflect` (¿qué aprendí? → memory candidates) + tests | done | d9db528 |
+| 4 | `KnowledgeMapService` + `GET /knowledge/map` + tests | in_progress | |
+| 5 | Routes + wiring (tutorials mode, learn, knowledge-map) + integration tests | in_progress | |
 | 6 | Rebrand README (My NotebookLM) + Live E2E (full learn cycle w/ research + reflect + map) | pending | |
 
 ## Acceptance criteria
@@ -51,4 +51,4 @@
 
 ## Evidence
 
-- Commit ids appended here as units close.
+- `d9db528` feat: tutorial depth modes and learning-loop orchestrator (tasks 1–3).

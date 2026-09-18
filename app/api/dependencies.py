@@ -20,6 +20,8 @@ from app.repositories.usage_repository import UsageRepository
 from app.services.chat_service import ChatService
 from app.services.eval_service import EvalService
 from app.services.ingestion_service import IngestionService
+from app.services.knowledge_map import KnowledgeMapService
+from app.services.learn_service import LearnService
 from app.services.memory_service import MemoryService
 from app.services.research_service import ResearchService
 from app.services.retrieval_service import RetrievalService
@@ -104,6 +106,16 @@ def get_sync_service(request: Request) -> SyncService:
 def get_tutorial_service(request: Request) -> TutorialService:
     """Return the shared tutorial service from ``app.state``."""
     return request.app.state.tutorial_service
+
+
+def get_learn_service(request: Request) -> LearnService:
+    """Return the shared learning-loop service from ``app.state``."""
+    return request.app.state.learn_service
+
+
+def get_knowledge_map_service(request: Request) -> KnowledgeMapService:
+    """Return the shared knowledge-map service from ``app.state``."""
+    return request.app.state.knowledge_map_service
 
 
 def get_research_service(request: Request) -> ResearchService:

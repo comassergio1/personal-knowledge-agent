@@ -24,7 +24,8 @@ async def generate_tutorial(
     """Generate a tutorial for ``objective``, persist it, and return it.
 
     Empty objectives are rejected by the schema (422); LLM provider failures
-    surface as 502. The tutorial is written into the vault and indexed
+    surface as 502. ``mode`` selects the tutorial depth and is echoed back on
+    the response. The tutorial is written into the vault and indexed
     immediately, so re-reading, deleting, and re-syncing reuse the existing
     documents endpoints.
     """
@@ -33,6 +34,7 @@ async def generate_tutorial(
             request.objective,
             project_id=request.project_id,
             title=request.title,
+            mode=request.mode,
         )
         await tutorial_service.persist(
             result, project_id=request.project_id, title=request.title
@@ -52,4 +54,5 @@ async def generate_tutorial(
             for source in result.sources
         ],
         warnings=result.warnings,
+        mode=result.mode,
     )
