@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DocumentRead(BaseModel):
@@ -42,6 +42,13 @@ class DocumentCreate(BaseModel):
     content: str
     mime_type: str
     source_type: str = "text"
+
+
+class DocumentAppendRequest(BaseModel):
+    """Payload for appending text to a document's vault file."""
+
+    text: str = Field(min_length=1)
+    section: str | None = None
 
 
 class DocumentList(BaseModel):

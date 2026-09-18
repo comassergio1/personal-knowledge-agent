@@ -202,3 +202,76 @@ def test_upload_pdf_stores_file_and_detail_has_extracted_text(
     vault_file = tmp_path / "vault" / "inbox" / "paper.pdf"
     assert vault_file.exists()
     assert vault_file.read_bytes() == pdf_bytes
+
+
+# -- append (PATCH /documents/{id}/append) ------------------------------------
+
+
+def test_append_writes_file_reindexes_and_detail_has_section(
+    test_app: TestClient, tmp_path
+) -> None:
+    created = test_app.post(
+        "/api/v1/documents",
+        files={"file": ("note.md", b"# Note\n\nBase content.", "text/markdown")},
+    ).json()
+    document_id = created["id"]
+    vector_store = test_app.app.state.vector_store
+
+    response = test_app.patch(
+        f"/api/v1/documents/{document_id}/append",
+        json={"text": "Appended fact.", "section": "Facts"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["stale"] is False
+    assert payload["content"] == "# Note\n\nBase content.\n## Facts\n\nAppended fact.\n"
+
+    detail = test_app.get(f"/api/v1/documents/{document_id}").json()
+    assert "Appended fact." in detail["content"]
+
+    vault_file = tmp_path / "vault" / "inbox" / "note.md"
+    assert "## Facts" in vault_file.read_text(encoding="utf-8")
+    assert vector_store.deleted_documents == [document_id]
+
+    chat = test_app.post(
+        "/api/v1/chat", json={"message": "What appended fact?"}
+    ).json()
+    assert any("Appended fact." in source["excerpt"] for source in chat["sources"])
+
+
+def test_append_missing_document_is_404(test_app: TestClient) -> None:
+    response = test_app.patch(
+        "/api/v1/documents/missing/append", json={"text": "more"}
+    )
+
+    assert response.status_code == 404
+
+
+def test_append_pdf_document_is_409(test_app: TestClient) -> None:
+    pdf_bytes = (FIXTURES / "sample.pdf").read_bytes()
+    created = test_app.post(
+        "/api/v1/documents",
+        files={"file": ("paper.pdf", pdf_bytes, "application/pdf")},
+        data={"title": "Paper"},
+    ).json()
+
+    response = test_app.patch(
+        f"/api/v1/documents/{created['id']}/append", json={"text": "more"}
+    )
+
+    assert response.status_code == 409
+    assert "text/markdown" in response.json()["detail"]
+
+
+def test_append_empty_text_is_422(test_app: TestClient) -> None:
+    created = test_app.post(
+        "/api/v1/documents",
+        files={"file": ("note.md", b"# Note\n\nContent.", "text/markdown")},
+    ).json()
+
+    response = test_app.patch(
+        f"/api/v1/documents/{created['id']}/append", json={"text": ""}
+    )
+
+    assert response.status_code == 422

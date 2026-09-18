@@ -361,6 +361,18 @@ class IngestionService:
         else:
             content = self._vault.read_text(document.file_path)
 
+        return await self._reindex_document(document_id, content, file_mtime)
+
+    async def _reindex_document(
+        self, document_id: str, content: str, file_mtime: datetime
+    ) -> DocumentDetail | None:
+        """Shared resync/append tail: chunk, replace rows, refresh vectors.
+
+        Replaces the document's content and chunks (bumping ``updated_at``
+        and refreshing ``file_mtime``), deletes the document's old vector
+        points, embeds and upserts the new chunks, and resolves the refreshed
+        detail. Returns None when the document row is gone.
+        """
         settings = get_settings()
         chunks = [
             Chunk(chunk_index=index, content=part)
@@ -378,6 +390,47 @@ class IngestionService:
         await self._vector_store.delete_by_document(document_id)
         refreshed = await self._store_vectors(updated)
         return self._resolve_detail(refreshed)
+
+    async def append_content(
+        self,
+        document_id: str,
+        *,
+        text: str,
+        section: str | None = None,
+    ) -> DocumentDetail | None:
+        """Append ``text`` (optionally under a ``section`` heading) and re-index.
+
+        The composed block is ``## <section>`` + blank line + ``text`` when a
+        section is given, else a blank line + ``text``; the file keeps exactly
+        one trailing newline. The file is written back through the vault and
+        the document is re-indexed with the same internals as :meth:`resync`.
+        Returns None when the document is missing. Raises ``ValueError`` when
+        the document is not a file-backed text/markdown document (PDFs are
+        read-only), when the vault is unavailable, or when the vault file is
+        gone from disk: the row records a ``file_path``, so a missing file is
+        an error state (appending would silently diverge from the row's
+        content).
+        """
+        document = await self._documents.get(document_id)
+        if document is None:
+            return None
+        if document.file_path is None or document.mime_type == PDF_MIME_TYPE:
+            raise ValueError(
+                "append only applies to file-backed text/markdown documents"
+            )
+        if self._vault is None:
+            raise ValueError("a VaultService is required to append to a document")
+
+        try:
+            current = self._vault.read_text(document.file_path)
+        except FileNotFoundError as exc:
+            raise ValueError(f"vault file is missing: {document.file_path}") from exc
+
+        append_block = f"## {section}\n\n{text}\n" if section else f"\n{text}\n"
+        new_content = current.rstrip() + "\n" + append_block
+        self._vault.write_text(document.file_path, new_content)
+        file_mtime = self._vault.mtime(document.file_path)
+        return await self._reindex_document(document_id, new_content, file_mtime)
 
     async def delete_document(self, document_id: str) -> bool:
         """Delete a document's vector points and rows. False when missing.

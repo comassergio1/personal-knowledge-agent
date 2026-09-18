@@ -11,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_db, get_ingestion_service, get_vector_store
 from app.domain.models.document import Document
 from app.repositories.document_repository import DocumentRepository
-from app.schemas.document import DocumentDetail, DocumentList, DocumentRead
+from app.schemas.document import (
+    DocumentAppendRequest,
+    DocumentDetail,
+    DocumentList,
+    DocumentRead,
+)
 from app.services.ingestion_service import IngestionService, ResyncError
 from app.vector.qdrant import QdrantVectorStore
 
@@ -106,6 +111,28 @@ async def resync_document(
     try:
         detail = await ingestion_service.resync(document_id)
     except ResyncError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return detail
+
+
+@router.patch("/{document_id}/append", response_model=DocumentDetail)
+async def append_document_content(
+    document_id: str,
+    request: DocumentAppendRequest,
+    ingestion_service: Annotated[IngestionService, Depends(get_ingestion_service)],
+) -> DocumentDetail:
+    """Append text to a document's vault file and re-index it.
+
+    Returns 404 when the document is missing and 409 when it is not a
+    file-backed text/markdown document (or its vault file is gone from disk).
+    """
+    try:
+        detail = await ingestion_service.append_content(
+            document_id, text=request.text, section=request.section
+        )
+    except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if detail is None:
         raise HTTPException(status_code=404, detail="Document not found")
