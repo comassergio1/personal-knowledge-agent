@@ -157,6 +157,14 @@ chat/coding secondary:
   (`Conceptos`, `Tutoriales`, `Experiencias`, `Recursos`, `Huecos`), citing
   your own material and calling out what is missing.
 
+## Despliegue en servidor (NAS / OpenMediaVault)
+
+`deploy/nas/` contiene el paquete de despliegue: Dockerfile, `docker-compose.yml`
+(stack: app + qdrant + searxng + ollama-embeddings + open-webui; puertos solo
+`8000` y `3000`), `env.template` y el runbook (`deploy/nas/README.md`) con
+primer arranque, migración de datos desde esta Mac, SMB/Obsidian, conexión de
+Open WebUI y backup.
+
 ## Consola (interfaz web propia)
 
 `GET http://localhost:8000/` serves a small static SPA (vanilla JS, no build

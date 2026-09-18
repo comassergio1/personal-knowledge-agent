@@ -1,0 +1,94 @@
+# My NotebookLM — stack for the NAS (OpenMediaVault).
+#
+# Run from deploy/nas/: `docker compose up -d --build`
+# Services talk to each other by name on the shared internal network; only
+# the app (console + API, port 8000) and Open WebUI (port 3000) are exposed.
+#
+# Data layout (bind mounts, editable via SMB and simple to back up with rsync):
+#   vault/            <- the knowledge vault (markdown files; sync with Obsidian via SMB)
+#   data/             <- SQLite DB (data/app.db)
+#   qdrant_storage/   <- vector store
+#   searxng_cache/    <- SearXNG runtime data
+#   ollama_data/      <- Ollama models (only the embedding model is pulled)
+#   open_webui_data/  <- Open WebUI database + uploads
+name: pka-nas
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/nas/Dockerfile
+    # Crea el archivo desde env.template:  cp env.template .env
+    env_file: .env
+    environment:
+      APP_ENV: production
+      DATABASE_URL: sqlite+aiosqlite:////data/app/app.db
+      VAULT_PATH: /data/vault
+      QDRANT_URL: http://qdrant:6333
+      SEARXNG_URL: http://searxng:8080
+      OLLAMA_BASE_URL: http://ollama:11434
+      EMBEDDING_PROVIDER: ollama
+      EMBEDDING_MODEL: nomic-embed-text
+      EMBEDDING_DIMENSIONS: 768
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./vault:/data/vault
+      - ./data:/data/app
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      searxng:
+        condition: service_started
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  searxng:
+    image: searxng/searxng:latest
+    volumes:
+      - ../config/searxng/settings.yml:/etc/searxng/settings.yml:ro
+      - ./searxng_cache:/var/cache/searxng
+    restart: unless-stopped
+
+  ollama:
+    # Only the embedding model is pulled at startup; chat stays in the cloud
+    # (opencode-go / payperq) per the product decision.
+    image: ollama/ollama:latest
+    volumes:
+      - ./ollama_data:/root/.ollama
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama serve &
+        sleep 3
+        ollama pull nomic-embed-text
+        wait
+    restart: unless-stopped
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    ports:
+      - "3000:8080"
+    environment:
+      # Lets Open WebUI also offer the raw local embedding/chat models.
+      OLLAMA_BASE_URL: http://ollama:11434
+      # Connect the grounded chat provider from the UI:
+      #   Settings → Connections → OpenAI API → http://app:8000/v1 (key: any).
+      # Newer Open WebUI versions also accept OPENAI_API_BASE_URLS (a list),
+      # e.g. OPENAI_API_BASE_URLS=http://app:8000/v1
+    volumes:
+      - ./open_webui_data:/app/backend/data
+    restart: unless-stopped
