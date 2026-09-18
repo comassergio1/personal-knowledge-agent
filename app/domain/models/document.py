@@ -31,6 +31,10 @@ class Document(Base):
     source_type: Mapped[str] = mapped_column(String(64), default="text")
     source_uri: Mapped[str | None] = mapped_column(Text, nullable=True)
     project_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    # sha256 of the raw content: idempotent ingestion skips re-uploading
+    # identical content within the same project (evals surfaced duplication
+    # noise degrading retrieval recall).
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     # Vault-relative POSIX path of the source-of-truth markdown file (None
     # when the document was ingested without a file, e.g. pasted text).
     file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)

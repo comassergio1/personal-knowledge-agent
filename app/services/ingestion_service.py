@@ -15,6 +15,7 @@ and the vault sync service never touch the vault or vector store directly.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from datetime import UTC, datetime
 from io import BytesIO
 
@@ -205,6 +206,20 @@ class IngestionService:
         size = settings.chunk_size if chunk_size is None else chunk_size
         overlap = settings.chunk_overlap if chunk_overlap is None else chunk_overlap
 
+        # Idempotent ingestion: identical content into the same project scope
+        # returns the existing document instead of duplicating rows/vectors
+        # (evals surfaced duplicate copies degrading retrieval recall).
+        content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        existing = await self._documents.find_by_content_hash(
+            content_hash, project_id
+        )
+        if existing is not None:
+            self._logger.info(
+                "duplicate content skipped (idempotent ingest)",
+                extra={"document_id": existing.id, "content_hash": content_hash[:12]},
+            )
+            return existing
+
         chunks = [
             Chunk(chunk_index=index, content=part)
             for index, part in enumerate(chunk_text(content, size=size, overlap=overlap))
@@ -218,6 +233,7 @@ class IngestionService:
             project_id=project_id,
             file_path=file_path,
             file_mtime=file_mtime,
+            content_hash=content_hash,
             chunks=chunks,
         )
         return await self._store_vectors(document)
@@ -257,6 +273,16 @@ class IngestionService:
             )
 
         settings = get_settings()
+        content_hash = hashlib.sha256(extracted.encode("utf-8")).hexdigest()
+        existing = await self._documents.find_by_content_hash(
+            content_hash, project_id
+        )
+        if existing is not None:
+            self._logger.info(
+                "duplicate pdf content skipped (idempotent ingest)",
+                extra={"document_id": existing.id, "content_hash": content_hash[:12]},
+            )
+            return existing
         chunks = [
             Chunk(chunk_index=index, content=part)
             for index, part in enumerate(
@@ -274,6 +300,7 @@ class IngestionService:
             project_id=project_id,
             file_path=file_path,
             file_mtime=file_mtime,
+            content_hash=content_hash,
             chunks=chunks,
         )
         return await self._store_vectors(document)

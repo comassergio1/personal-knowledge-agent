@@ -34,6 +34,7 @@ class DocumentRepository:
         project_id: str | None = None,
         file_path: str | None = None,
         file_mtime: datetime | None = None,
+        content_hash: str | None = None,
         chunks: Sequence[Chunk] | None = None,
     ) -> Document:
         """Create a document with its chunks in one transaction."""
@@ -46,6 +47,7 @@ class DocumentRepository:
             project_id=project_id,
             file_path=file_path,
             file_mtime=file_mtime,
+            content_hash=content_hash,
         )
         # Always initialize the collection so it is never lazy-loaded in an
         # async context after commit.
@@ -95,6 +97,27 @@ class DocumentRepository:
         if project_id is not None:
             stmt = stmt.where(Document.project_id == project_id)
         return (await self._session.scalars(stmt)).all()
+
+    async def find_by_content_hash(
+        self, content_hash: str, project_id: str | None
+    ) -> Document | None:
+        """Return an existing document with the same content hash in the same
+        project scope (chunks loaded), or None.
+
+        Backs idempotent ingestion: re-uploading identical content into the
+        same project returns the existing document instead of adding duplicate
+        rows and vectors (evals surfaced duplicated copies degrading retrieval
+        recall).
+        """
+        stmt = (
+            select(Document)
+            .options(selectinload(Document.chunks))
+            .where(
+                Document.content_hash == content_hash,
+                Document.project_id == project_id,
+            )
+        )
+        return await self._session.scalar(stmt)
 
     async def replace_file_content(
         self,
