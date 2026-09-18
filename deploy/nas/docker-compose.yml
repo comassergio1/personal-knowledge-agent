@@ -79,6 +79,9 @@ services:
     restart: unless-stopped
 
   open-webui:
+    # Light stack on 4GB: excluded by default (profiles: ["ui"]).
+    # Add it anytime with:  docker compose --profile ui up -d
+    profiles: ["ui"]
     image: ghcr.io/open-webui/open-webui:main
     ports:
       - "3000:8080"

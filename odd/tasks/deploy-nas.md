@@ -5,7 +5,7 @@
 **Decisions (user 2026-09-18)**: chat en nube (opencode-go / payperq) con Ollama SOLO para embeddings (nomic-embed-text); puertos expuestos solo app:8000 (consola+API) y open-webui:3000; todo lo demás por red interna del stack.
 
 **Branch policy**: commits on `main`.
-**Status**: done — paquete de despliegue validado (2026-09-18).
+**Status**: done — paquete + variante light (2026-09-18).
 
 ## Deliverables (deploy/nas/)
 
@@ -35,6 +35,8 @@
 | 2 | Runbook `deploy/nas/README.md` (arranque, migración, SMB/Obsidian, OWUI, backup) | done | (paquete deploy-nas) |
 | 3 | Validación: `docker build`, `docker compose config`, boot smoke de la imagen contra servicios host | done | (paquete deploy-nas) |
 | 4 | Referencia en README raíz + commit | done | (paquete deploy-nas) |
+| 5 | Variante light: open-webui detrás de `profile: ui` (default = cerebro sin UI) + retry de arranque del app (orden al boot) + test | done | (light) |
+| 6 | Runbook actualizado: light/full, swapfile 4GB, escala a 8GB | done | (light) |
 
 ## Acceptance criteria
 

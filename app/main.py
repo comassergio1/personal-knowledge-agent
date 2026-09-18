@@ -10,6 +10,7 @@ fully offline.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
@@ -78,6 +79,40 @@ from app.vector.collections import (
     TITLE_FIELD,
 )
 from app.vector.qdrant import QdrantVectorStore, SearchHit, VectorPoint
+
+_QDRANT_READY_ATTEMPTS = 10
+_QDRANT_READY_DELAY = 5
+
+
+async def _ensure_collections_ready(
+    vector_store: QdrantVectorStore,
+    memory_store: QdrantVectorStore,
+    size: int,
+) -> None:
+    """Ensure both collections, retrying while qdrant boots.
+
+    Compose ``depends_on`` orders a manual ``up``, but at daemon boot Docker
+    restarts containers without guaranteed ordering — retry so a fast app
+    container start survives a still-booting qdrant, then raise for the
+    restart policy to converge (self-healing).
+    """
+    last_error: Exception | None = None
+    for attempt in range(1, _QDRANT_READY_ATTEMPTS + 1):
+        try:
+            await vector_store.ensure_collection(size)
+            await memory_store.ensure_collection(size)
+            return
+        except Exception as exc:  # noqa: BLE001 - any qdrant error is retryable
+            last_error = exc
+            if attempt < _QDRANT_READY_ATTEMPTS:
+                get_logger("main").warning(
+                    "qdrant not ready (attempt %d/%d): %s",
+                    attempt,
+                    _QDRANT_READY_ATTEMPTS,
+                    exc,
+                )
+                await asyncio.sleep(_QDRANT_READY_DELAY)
+    raise RuntimeError(f"qdrant did not become ready: {last_error}") from last_error
 
 APP_TITLE = "Personal Knowledge Agent"
 APP_VERSION = "0.1.0"
@@ -363,8 +398,12 @@ def _make_lifespan(
             search_provider = SearchProviderFactory.create(
                 settings.search_provider, settings
             )
-        await vector_store.ensure_collection(settings.embedding_dimensions)
-        await memory_store.ensure_collection(settings.embedding_dimensions)
+        # Boot ordering on the NAS: Docker restarts containers with an
+        # automatic start, but the order is not guaranteed then — retry the
+        # vector stores so a fast app start survives a still-booting qdrant.
+        await _ensure_collections_ready(
+            vector_store, memory_store, settings.embedding_dimensions
+        )
         # Dev/test fallback; Alembic remains the canonical schema manager.
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)

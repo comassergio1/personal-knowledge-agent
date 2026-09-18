@@ -8,8 +8,28 @@ en un solo stack docker compose, con los datos en tu disco (vault incluido).
 
 - El **chat usa la nube** (OpenCode Go por default; PayPerQ opcional — `.env`).
 - **Ollama corre en el stack solo para embeddings** (`nomic-embed-text`).
-- Se exponen **solo** los puertos `8000` (consola + API) y `3000` (Open WebUI);
-  Qdrant, SearXNG, Ollama y el app se hablan entre sí por la red interna.
+- Se exponen **solo** los puertos `8000` (consola + API) y — si corres el perfil
+  completo — `3000` (Open WebUI); Qdrant, SearXNG, Ollama y el app se hablan
+  entre sí por la red interna.
+
+## Variante light por defecto (4 GB) vs. completa
+
+El stack arranca **sin Open WebUI** por defecto (perfil `ui` apagado): eso
+libera ~400–800 MB, la diferencia entre andar o swapear en una máquina de
+4 GB con Nextcloud. Para levantar la UI completa solo cuando la RAM lo
+permita:
+
+```bash
+docker compose --profile ui up -d   # agrega Open WebUI (:3000)
+```
+
+| Escenario | RAM libre | Recomendación |
+|---|---|---|
+| 4 GB + Nextcloud | ~0 | **light** (este stack sin `--profile ui`) + swapfile de 2 GB |
+| 8 GB | cómodo | stack completo (`--profile ui`) |
+| 16 GB | sobra | completo |
+
+Swap en OMV (una sola vez): `fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile` y agregar al fstab para que persista.
 
 ## Requisitos en la NAS (OMV)
 
@@ -105,6 +125,14 @@ Más simple todavía: un cron en OMV que haga eso diariamente.
 - Es un servicio **LAN-only**: la app no tiene autenticación (v1) — no
   exposes el puerto 8000 a internet y mantené el firewall de OMV en LAN.
 - Las API keys viven en `deploy/nas/.env` (no en la base de conocimiento).
+
+## Arranque automático al encender la PC
+
+Con `restart: unless-stopped`, Docker Engine arranca los contenedores solo en
+cada boot (incluido el encendido remoto/WoL) — no hay que configurar nada más.
+Al arrancar, el app **reintenta hasta ~50s** mientras qdrant se inicializa, así
+que el orden del boot no rompe nada (se auto-cura). La primera vez que Ollama
+arranca hace `ollama pull nomic-embed-text` (una vez; después es un no-op).
 
 ## Troubleshooting rápido
 
