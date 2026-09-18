@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from app.core.config import Settings
 from app.domain.models import Base  # noqa: F401  (registers all tables)
 import app.domain.models.document  # noqa: F401  (ensure models are imported)
+import app.domain.models.eval  # noqa: F401  (ensure eval model is imported)
 import app.domain.models.memory  # noqa: F401  (ensure memory model is imported)
 import app.domain.models.project  # noqa: F401  (ensure project model is imported)
 import app.domain.models.usage  # noqa: F401  (ensure usage model is imported)
