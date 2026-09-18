@@ -3,7 +3,7 @@
 **Project**: Personal Knowledge Agent (PKA).
 **Spec source**: `Personal Knowledge Agent.md`, sections 11–13, 22, 25, 34.
 **Branch policy**: commits on `main`.
-**Status**: in_progress
+**Status**: done — memory with extraction, approval, mirror, chat (2026-09-18)
 
 ## Scope (Phase 4, user-shaped 2026-09-18)
 
@@ -39,7 +39,7 @@
 | 6 | Approve/reject side effects: vector upsert/remove + vault mirror | in_progress | |
 | 7 | Chat integration: `MEMORY` prompt section (§25) | in_progress | |
 | 8 | Tests: redaction, extractor, lifecycle, mirror, chat section | in_progress | |
-| 9 | Live E2E (extract real conversation → approve → mirror file → chat uses memory) + README | pending | |
+| 9 | Live E2E (extract real conversation → approve → mirror file → chat uses memory) + README | done | 02a68db + docs |
 
 ## Acceptance criteria
 
@@ -50,3 +50,11 @@
 ## Evidence
 
 - `6ae6073` feat: memory model, secret redaction, CRUD, and multi-collection vectors (tasks 1–4).
+- `02a68db` feat: memory extraction, validation effects, and chat MEMORY section (tasks 5–8).
+
+### Live verification (task 9, real stack)
+
+- Conversation (with intentional `password=hunter2`) → `POST /memories/extract` (OpenCode Go `glm-5.3`): 4 candidates (2 preference, 2 episodic); NO secret leaked — the model converted the credential into a privacy-preference memory; regex redaction remains the last line of defense (unit-tested).
+- Approve preference → Qdrant `memories` vector + Obsidian mirror `data/vault/_memories/preference/user-prefers-step-by-step-….md`.
+- Chat: “Según lo que tengo registrado, prefieres los tutoriales paso a paso con verificación al final” — the reply adopted that structure; MEMORY section works live.
+- Edge case documentado: mirror path recomputed tras restart con slug dedupe (-2) puede no matchear en reject; DB sigue siendo autoritativa.

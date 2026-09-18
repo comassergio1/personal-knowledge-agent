@@ -9,16 +9,17 @@ The application owns Conversations, Documents, Knowledge, Memories, Embeddings,
 Research, Projects, and Evals. LLM providers (Ollama, PayPerQ, OpenCode Go) only
 provide inference — switching providers never loses or touches your data.
 
-**Current status: Fase 3 — file-first knowledge vault.**
+**Current status: Fase 4 — personal memory.**
 
-Documents are **markdown files on disk** in an Obsidian-compatible vault
-(`data/vault`, gitignored): ingest writes them, you edit them in Obsidian, and
-`POST /vault/sync` (or per-document resync) re-indexes your edits into
-SQLite+Qdrant. Projects organize knowledge; PDFs are ingested (text extracted
-for RAG, file kept in the vault) while PDF export stays yours. Three LLM
-providers live (Ollama, PayPerQ, OpenCode Go) with per-request cost accounting.
-Memory extraction, research, tutorials, evals, and the coding-agent
-integration are later phases.
+Documents live in an Obsidian-compatible vault (`data/vault`, gitignored);
+projects organize knowledge; PDFs are ingested; and the agent now **learns**:
+`POST /memories/extract` turns conversations into candidate memories
+(semantic/episodic/procedural/preference) with secret redaction; approving a
+candidate stores it as a vector AND as a markdown mirror in
+`vault/_memories/` (viewable/editable in Obsidian); approved memories feed the
+chat prompt (MEMORY section). Three LLM providers live with cost accounting.
+Tutorial engine, research agent, evals, and the coding-agent integration are
+later phases.
 
 ## Architecture
 
@@ -104,6 +105,10 @@ with any tool — Obsidian works out of the box:
 | POST | `/projects` · GET · DELETE | Project CRUD (DELETE cascades docs + vectors + vault files) |
 | POST | `/vault/sync` | Scan the vault: create/update/delete rows+vectors to match files |
 | POST | `/chat` | `{"message": "...", "top_k": 5, "document_id": "...", "project_id": "..."}` → grounded answer + sources |
+| POST | `/memories/extract` | `{"conversation": [{"role", "content"}...]}` → candidate memories (redacted) |
+| GET | `/memories` · `/{id}` | List (`?type=`/`?status=`) / get memories |
+| POST | `/memories/{id}/approve` · `/reject` | Validation gate: approve stores vector + Obsidian mirror |
+| DELETE | `/memories/{id}` | Remove memory (row + vector + mirror) |
 | GET | `/usage` | Recent per-request LLM usage, totals, and per-provider breakdown (§30) |
 | GET | `/health` | App status + Qdrant/Ollama reachability (never 5xx) |
 
@@ -145,6 +150,24 @@ the `personal-knowledge-agent/0.1.0` User-Agent (per the provider docs);
 providers were validated live (Fase 2). A fallback provider chain (primary →
 fallback, spec §29) is a planned enhancement.
 
+## Memory (Fase 4)
+
+Memories follow a **candidate → approve/reject** lifecycle (spec §13); only
+approved memories reach the chat prompt:
+
+- `POST /memories/extract` runs the conversation through the LLM Gateway and
+  produces candidates: `semantic`, `episodic`, `procedural`, `preference`,
+  each with content + confidence. Secrets are redacted (`[REDACTED]`) before
+  anything is stored (spec §34: passwords, api keys, Bearer tokens, private
+  key blocks, AWS keys, JWTs).
+- `POST /memories/{id}/approve` stores the memory (Qdrant `memories`
+  collection) and writes an Obsidian mirror at
+  `data/vault/_memories/<type>/<slug>.md` with YAML frontmatter — review your
+  memory vault in Obsidian. `reject`/`delete` remove the vector and mirror.
+- Chat automatically retrieves approved memories (top-k=3) and places them in
+  the prompt as the labeled `MEMORY` section (spec §25).
+- Extraction is **explicit** (no per-chat auto-extraction) by design.
+
 ## Cost control (spec §30)
 
 Every LLM request is recorded in the `llm_usage` table (provider, model,
@@ -180,23 +203,24 @@ uv run ruff check app tests
 
 ```
 app/
-  api/routes/      chat · documents · health · projects · sync · usage
+  api/routes/      chat · documents · health · memories · projects · sync · usage
   core/            config (pydantic-settings) · logging
-  domain/models/   Document · Chunk · Project · LLMUsage (SQLAlchemy 2.0)
+  domain/models/   Document · Chunk · Project · Memory · LLMUsage (SQLAlchemy 2.0)
   providers/       llm/ (base · ollama · payperq · opencode_go · factory)
                    embeddings/ (base · ollama · factory)
-  repositories/    document_repository · project_repository · usage_repository
-  schemas/         document · chat · project · sync · usage
-  services/        chunking · ingestion · retrieval · chat · sync · vault
-  vector/          qdrant store · collections constants
+  repositories/    document · project · memory · usage
+  schemas/         document · chat · project · memory · sync · usage
+  services/        chunking · ingestion · retrieval · chat · memory · redaction
+                   sync · vault
+  vector/          qdrant store (knowledge + memories) · collections constants
 examples/          sample knowledge document
 scripts/           smoke_e2e.py
-odd/tasks/         feature tracking (vertical-slice, phase2, phase3)
+odd/tasks/         feature tracking (vertical-slice, phase2-4)
 ```
 
 ## Roadmap
 
-Fase 1 vertical slice ✔ → Fase 2 multi-provider live ✔ → Fase 3 knowledge
-vault + projects + PDF ✔ → Fase 4 memory extraction/approval → tutorial engine
-→ research agent → coding-agent integration → evals → LangGraph workflows when
-stateful multi-step flows demand it.
+Fase 1 vertical slice ✔ → Fase 2 multi-provider ✔ → Fase 3 knowledge vault +
+projects + PDF ✔ → Fase 4 memory (extraction + approval + chat) ✔ → tutorial
+generator → research agent → coding-agent integration → evals → LangGraph
+workflows when stateful multi-step flows demand it.
