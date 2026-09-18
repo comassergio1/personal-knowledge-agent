@@ -18,6 +18,7 @@ from app.repositories.memory_repository import MemoryRepository
 from app.repositories.usage_repository import UsageRepository
 from app.services.chat_service import ChatService
 from app.services.ingestion_service import IngestionService
+from app.services.memory_service import MemoryService
 from app.services.retrieval_service import RetrievalService
 from app.services.sync_service import SyncService
 from app.services.vault_service import VaultService
@@ -74,6 +75,11 @@ def get_usage_repository(request: Request) -> UsageRepository:
 def get_memory_repository(request: Request) -> MemoryRepository:
     """Return the app-scoped memory repository from ``app.state``."""
     return request.app.state.memory_repository
+
+
+def get_memory_service(request: Request) -> MemoryService:
+    """Return the shared memory service from ``app.state``."""
+    return request.app.state.memory_service
 
 
 def get_vault_service(request: Request) -> VaultService:

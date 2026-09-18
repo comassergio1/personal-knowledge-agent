@@ -17,6 +17,7 @@ from app.core.logging import get_logger
 from app.providers.llm.base import ChatMessage, LLMProvider
 from app.repositories.usage_repository import UsageRepository
 from app.schemas.chat import ChatResult, SourceRef
+from app.services.memory_service import MemoryService
 from app.services.retrieval_service import RetrievalService
 from app.vector.collections import CHUNK_INDEX_FIELD
 
@@ -66,11 +67,16 @@ class ChatService:
         retrieval: RetrievalService,
         settings: Settings,
         usage_repository: UsageRepository | None = None,
+        memory: MemoryService | None = None,
     ) -> None:
         self._llm = llm
         self._retrieval = retrieval
         self._settings = settings
         self._usage_repository = usage_repository
+        # Optional memory provider (spec §25); when set, approved memories are
+        # injected as a MEMORY section ahead of the knowledge chunks. The
+        # default keeps existing callers and tests working unchanged.
+        self._memory = memory
         self._logger = get_logger("chat_service")
 
     async def chat(
@@ -88,14 +94,26 @@ class ChatService:
             message, top_k=top_k, document_id=document_id, project_id=project_id
         )
 
+        memories: list[str] = []
+        if self._memory is not None:
+            memories = await self._memory.search_approved(message, top_k=3)
+
+        memory_block = ""
+        if memories:
+            memory_block = (
+                "MEMORY\n" + "\n".join(f"- {item}" for item in memories) + "\n\n"
+            )
+
         if hits:
             knowledge = "\n".join(
                 f"[{index + 1}] ({hit.title}) {hit.content}"
                 for index, hit in enumerate(hits)
             )
-            user_content = f"KNOWLEDGE\n{knowledge}\n\nUSER REQUEST\n{message}"
+            user_content = (
+                f"{memory_block}KNOWLEDGE\n{knowledge}\n\nUSER REQUEST\n{message}"
+            )
         else:
-            user_content = f"USER REQUEST\n{message}"
+            user_content = f"{memory_block}USER REQUEST\n{message}"
 
         messages = [
             ChatMessage(role="system", content=_SYSTEM_PROMPT),
@@ -141,6 +159,7 @@ class ChatService:
                 "provider": self._llm.name,
                 "model": self._settings.llm_model,
                 "retrieved_chunks": len(hits),
+                "memory_chunks": len(memories),
                 "latency_ms": latency_ms,
                 "answer_length": len(answer),
                 "input_tokens": prompt_tokens,

@@ -86,6 +86,72 @@ def test_file_primitives_accept_vault_relative_paths(tmp_path) -> None:
     assert not service.exists("research/note.md")
 
 
+# -- memory mirror (spec §13) -----------------------------------------------
+
+
+def _root(tmp_path):
+    return (tmp_path / "vault").resolve()
+
+
+def test_memory_mirror_path_maps_type_folder_and_content_slug(tmp_path) -> None:
+    service = VaultService(tmp_path / "vault")
+
+    path = service.memory_mirror_path("semantic", "The user prefers concise answers")
+
+    assert path == (
+        _root(tmp_path) / "_memories" / "semantic" / "the-user-prefers-concise-answers.md"
+    )
+
+
+def test_memory_mirror_path_dedupes_existing_files_with_suffix(tmp_path) -> None:
+    service = VaultService(tmp_path / "vault")
+    first = service.memory_mirror_path("semantic", "Same content here")
+    service.write_text(first, "one")
+
+    second = service.memory_mirror_path("semantic", "Same content here")
+
+    assert second == _root(tmp_path) / "_memories" / "semantic" / "same-content-here-2.md"
+
+
+def test_memory_mirror_path_slugs_only_first_80_chars(tmp_path) -> None:
+    service = VaultService(tmp_path / "vault")
+    long_content = "word " * 30  # 150 chars
+
+    path = service.memory_mirror_path("procedural", long_content)
+
+    assert path == _root(tmp_path) / "_memories" / "procedural" / f"{service.slugify(long_content[:80])}.md"
+    assert len(path.stem) < len(service.slugify(long_content))
+
+
+def test_write_memory_mirror_roundtrip_with_frontmatter_and_verbatim_content(tmp_path) -> None:
+    service = VaultService(tmp_path / "vault")
+    content = (
+        "MixedMarkdown **bold** and a code block:\n"
+        "```py\nx = 1\n```\n"
+        "line three"
+    )
+
+    path = service.write_memory_mirror("semantic", content, 0.8, "conversation", "approved")
+
+    assert path.exists()
+    text = service.read_text(path)
+    assert text.startswith("---\n")
+    assert "type: semantic" in text
+    assert "confidence: 0.8" in text
+    assert "status: approved" in text
+    assert "source: conversation" in text
+    assert text.rstrip().endswith(content)  # content verbatim below the frontmatter
+
+
+def test_write_memory_mirror_escapes_colon_in_source(tmp_path) -> None:
+    service = VaultService(tmp_path / "vault")
+
+    path = service.write_memory_mirror("preference", "likes tea", 0.5, "chat: 2026-09", "approved")
+
+    text = service.read_text(path)
+    assert 'source: "chat: 2026-09"' in text
+
+
 def test_mtime_returns_utc_datetime_and_none_when_missing(tmp_path) -> None:
     service = VaultService(tmp_path / "vault")
     path = service.markdown_path("Project", "Note")

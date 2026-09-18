@@ -45,6 +45,8 @@ from app.repositories.project_repository import ProjectRepository
 from app.repositories.usage_repository import UsageRepository
 from app.services.chat_service import ChatService
 from app.services.ingestion_service import IngestionService
+from app.services.memory_extractor import MemoryExtractor
+from app.services.memory_service import MemoryService
 from app.services.retrieval_service import RetrievalService
 from app.services.sync_service import SyncService
 from app.services.vault_service import VaultService
@@ -52,6 +54,7 @@ from app.vector.collections import (
     CHUNK_ID_FIELD,
     CONTENT_FIELD,
     DOCUMENT_ID_FIELD,
+    MEMORIES_COLLECTION,
     METADATA_FIELD,
     PROJECT_ID_FIELD,
     TITLE_FIELD,
@@ -64,16 +67,35 @@ APP_VERSION = "0.1.0"
 _logger = get_logger("application")
 
 
+# Marker in the extractor's system prompt; the fake LLM answers extraction
+# prompts with a canned candidate array so the testing app stays offline.
+_EXTRACTOR_MARKER = "Output ONLY a JSON array"
+
+
 class _FakeLLM(LLMProvider):
-    """Canned-answer LLM used when ``testing=True`` (no network)."""
+    """Canned-answer LLM used when ``testing=True`` (no network).
+
+    Memory-extraction prompts get a canned candidate array (containing a
+    secret, so redaction is exercised); everything else gets a canned chat
+    answer.
+    """
 
     name = "fake-llm"
 
     async def generate(
         self, messages: list, *, model: str | None = None, **kwargs
     ) -> LLMResult:
+        joined = "\n".join(m.content for m in messages)
+        if _EXTRACTOR_MARKER in joined:
+            content = (
+                '[{"type": "preference", "content": "User prefers concise '
+                'answers (account password=hunter2)", "confidence": 0.9, '
+                '"source": "conversation"}]'
+            )
+        else:
+            content = "This is a fake grounded answer."
         return LLMResult(
-            content="This is a fake grounded answer.",
+            content=content,
             prompt_tokens=0,
             completion_tokens=0,
             provider="fake-llm",
@@ -122,24 +144,33 @@ class _FakeVectorStore:
         project_id: str | None = None,
         score_threshold: float | None = None,
     ) -> list[SearchHit]:
+        # Defensive ``.get()`` mirrors the real store, so memory points (which
+        # carry memory payload fields, not chunk ones) never KeyError.
         hits: list[SearchHit] = []
         for point in self._points:
             payload = point.payload
-            if document_id is not None and payload[DOCUMENT_ID_FIELD] != document_id:
+            if document_id is not None and payload.get(DOCUMENT_ID_FIELD) != document_id:
                 continue
-            if project_id is not None and payload[PROJECT_ID_FIELD] != project_id:
+            if project_id is not None and payload.get(PROJECT_ID_FIELD) != project_id:
                 continue
             hits.append(
                 SearchHit(
-                    chunk_id=payload[CHUNK_ID_FIELD],
-                    document_id=payload[DOCUMENT_ID_FIELD],
-                    title=payload[TITLE_FIELD],
-                    content=payload[CONTENT_FIELD],
+                    chunk_id=payload.get(CHUNK_ID_FIELD, str(point.id)),
+                    document_id=payload.get(DOCUMENT_ID_FIELD, ""),
+                    title=payload.get(TITLE_FIELD, ""),
+                    content=payload.get(CONTENT_FIELD, ""),
                     score=0.9,
-                    metadata=payload[METADATA_FIELD],
+                    metadata=payload.get(METADATA_FIELD, {}) or {},
                 )
             )
         return hits[:top_k]
+
+    async def delete_by_field(self, field: str, value: str) -> None:
+        self._points = [
+            point
+            for point in self._points
+            if point.payload.get(field) != value
+        ]
 
     async def delete_by_document(self, document_id: str) -> None:
         self.deleted_documents.append(document_id)
@@ -191,15 +222,22 @@ def _make_lifespan(
                 settings.embedding_dimensions
             )
             vector_store = _FakeVectorStore()
+            # Memories get their own in-memory store so document points and
+            # memory points never mix, mirroring the production split.
+            memory_store = _FakeVectorStore()
             llm: LLMProvider = _FakeLLM()
         else:
             embeddings = EmbeddingProviderFactory.create(
                 settings.embedding_provider, settings
             )
             vector_store = QdrantVectorStore(url=settings.qdrant_url)
+            memory_store = QdrantVectorStore(
+                url=settings.qdrant_url, collection=MEMORIES_COLLECTION
+            )
             llm = LLMProviderFactory.create(settings.llm_provider, settings)
 
         await vector_store.ensure_collection(settings.embedding_dimensions)
+        await memory_store.ensure_collection(settings.embedding_dimensions)
         # Dev/test fallback; Alembic remains the canonical schema manager.
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
@@ -214,8 +252,18 @@ def _make_lifespan(
         usage_repository = UsageRepository(usage_session)
         memory_session = session_factory()
         memory_repository = MemoryRepository(memory_session)
+        memory_extractor = MemoryExtractor(llm)
+        memory_service = MemoryService(
+            memory_repository,
+            memory_store,
+            embeddings,
+            vault=vault_service,
+            extractor=memory_extractor,
+        )
         retrieval_service = RetrievalService(vector_store, embeddings)
-        chat_service = ChatService(llm, retrieval_service, settings, usage_repository)
+        chat_service = ChatService(
+            llm, retrieval_service, settings, usage_repository, memory=memory_service
+        )
 
         app.state.settings = settings
         app.state.engine = engine
@@ -242,6 +290,8 @@ def _make_lifespan(
         app.state.chat_service = chat_service
         app.state.usage_repository = usage_repository
         app.state.memory_repository = memory_repository
+        app.state.memory_store = memory_store
+        app.state.memory_service = memory_service
 
         _logger.info(
             "application started",
@@ -250,7 +300,7 @@ def _make_lifespan(
         try:
             yield
         finally:
-            for resource in (vector_store, llm, embeddings):
+            for resource in (vector_store, memory_store, llm, embeddings):
                 await _close_resource(resource)
             await ingestion_session.close()
             await usage_session.close()

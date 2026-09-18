@@ -226,3 +226,117 @@ async def test_delete_missing_is_404(tmp_path) -> None:
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.delete("/api/v1/memories/does-not-exist")
             assert response.status_code == 404
+
+
+# -- unit 2: extract, side-effect approve/reject/delete ----------------------
+
+
+def _conversation_payload() -> dict:
+    return {
+        "conversation": [
+            {"role": "user", "content": "my account password is hunter2 and I prefer concise answers"},
+            {"role": "assistant", "content": "noted."},
+        ]
+    }
+
+
+async def test_extract_returns_redacted_persisted_candidates(tmp_path) -> None:
+    app = create_test_app(tmp_path)
+
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post("/api/v1/memories/extract", json=_conversation_payload())
+
+            assert response.status_code == 200
+            payload = response.json()
+            assert len(payload["candidates"]) == 1
+            candidate = payload["candidates"][0]
+            assert candidate["status"] == "candidate"
+            assert candidate["memory_type"] == "preference"
+            assert "[REDACTED]" in candidate["content"]
+            assert "hunter2" not in candidate["content"]
+
+            # persisted: fetchable by id and listed
+            detail = await client.get(f"/api/v1/memories/{candidate['id']}")
+            assert detail.status_code == 200
+            assert detail.json()["content"] == candidate["content"]
+            listing = await client.get("/api/v1/memories")
+            assert listing.json()["total"] == 1
+
+
+async def test_extract_validates_empty_conversation_and_roles(tmp_path) -> None:
+    app = create_test_app(tmp_path)
+
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            empty = await client.post(
+                "/api/v1/memories/extract", json={"conversation": []}
+            )
+            assert empty.status_code == 422
+
+            unknown_role = await client.post(
+                "/api/v1/memories/extract",
+                json={"conversation": [{"role": "system", "content": "hi"}]},
+            )
+            assert unknown_role.status_code == 422
+
+
+async def test_extract_then_approve_writes_mirror_and_vector_and_keeps_candidate_only_reject(
+    tmp_path,
+) -> None:
+    app = create_test_app(tmp_path)
+
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            extracted = await client.post(
+                "/api/v1/memories/extract", json=_conversation_payload()
+            )
+            candidate_id = extracted.json()["candidates"][0]["id"]
+
+            approved = await client.post(f"/api/v1/memories/{candidate_id}/approve")
+            assert approved.status_code == 200
+            assert approved.json()["status"] == "approved"
+            detail = await client.get(f"/api/v1/memories/{candidate_id}")
+            assert detail.json()["status"] == "approved"
+
+            # vector point landed in the memories store
+            points = app.state.memory_store._points
+            assert len(points) == 1
+            assert points[0].payload["memory_id"] == candidate_id
+            assert points[0].payload["status"] == "approved"
+
+            # mirror file exists in the tmp vault with frontmatter
+            vault = app.state.vault_service
+            files = vault.scan()
+            assert len(files) == 1
+            text = vault.read_text(files[0].abs_path)
+            assert "status: approved" in text
+            assert "type: preference" in text
+
+            # unit-1 guard kept: approved memories cannot be rejected via API
+            rejected = await client.post(f"/api/v1/memories/{candidate_id}/reject")
+            assert rejected.status_code == 409
+
+
+async def test_delete_via_api_removes_vector_and_mirror(tmp_path) -> None:
+    app = create_test_app(tmp_path)
+
+    async with app.router.lifespan_context(app):
+        ids = await _seed(app)
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            approved = await client.post(f"/api/v1/memories/{ids[0]}/approve")
+            assert approved.status_code == 200
+            assert len(app.state.memory_store._points) == 1
+            assert len(app.state.vault_service.scan()) == 1
+
+            deleted = await client.delete(f"/api/v1/memories/{ids[0]}")
+            assert deleted.status_code == 204
+
+            gone = await client.get(f"/api/v1/memories/{ids[0]}")
+            assert gone.status_code == 404
+            assert app.state.memory_store._points == []
+            assert app.state.vault_service.scan() == []

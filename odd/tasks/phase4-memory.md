@@ -31,14 +31,14 @@
 
 | # | Task | Status | Commit |
 |---|------|--------|--------|
-| 1 | `redact_secrets()` (spec §34) + unit tests | pending | |
-| 2 | `Memory` model + migration + `MemoryRepository` | pending | |
-| 3 | Memory schemas + CRUD routes (list/get/delete, approve/reject status) | pending | |
-| 4 | `QdrantVectorStore` multi-collection (`memories`) + constants | pending | |
-| 5 | `MemoryExtractor` (LLM JSON candidates, lenient parsing) | pending | |
-| 6 | Approve/reject side effects: vector upsert/remove + vault mirror | pending | |
-| 7 | Chat integration: `MEMORY` prompt section (§25) | pending | |
-| 8 | Tests: redaction, extractor, lifecycle, mirror, chat section | pending | |
+| 1 | `redact_secrets()` (spec §34) + unit tests | done | 6ae6073 |
+| 2 | `Memory` model + migration + `MemoryRepository` | done | 6ae6073 |
+| 3 | Memory schemas + CRUD routes (list/get/delete, approve/reject status) | done | 6ae6073 |
+| 4 | `QdrantVectorStore` multi-collection (`memories`) + constants | done | 6ae6073 |
+| 5 | `MemoryExtractor` (LLM JSON candidates, lenient parsing) | in_progress | |
+| 6 | Approve/reject side effects: vector upsert/remove + vault mirror | in_progress | |
+| 7 | Chat integration: `MEMORY` prompt section (§25) | in_progress | |
+| 8 | Tests: redaction, extractor, lifecycle, mirror, chat section | in_progress | |
 | 9 | Live E2E (extract real conversation → approve → mirror file → chat uses memory) + README | pending | |
 
 ## Acceptance criteria
@@ -49,4 +49,4 @@
 
 ## Evidence
 
-- Commit ids appended here as units close.
+- `6ae6073` feat: memory model, secret redaction, CRUD, and multi-collection vectors (tasks 1–4).

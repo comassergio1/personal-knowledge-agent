@@ -16,6 +16,22 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+# Obsidian mirror folder for approved memories, relative to the vault root.
+MEMORIES_DIR = "_memories"
+
+
+def _escape_frontmatter_value(value: str) -> str:
+    """Return ``value`` as a safe YAML scalar (simplified escaping).
+
+    Values that could break a YAML line (leading/trailing whitespace,
+    embedded colons or newlines) are double-quoted with quotes/backslashes
+    escaped; clean values pass through unchanged.
+    """
+    if value != value.strip() or "\n" in value or ":" in value:
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    return value
+
 
 @dataclass(frozen=True)
 class VaultFile:
@@ -81,6 +97,48 @@ class VaultService:
             if not candidate.exists():
                 return candidate
             index += 1
+
+    # -- Memory mirror (spec §13, user decision: Obsidian mirror) ------------
+
+    def memory_mirror_path(self, memory_type: str, content: str) -> Path:
+        """Return an absolute mirror path under ``_memories/<type>/``.
+
+        The filename is the slug of the first 80 characters of the content,
+        deduped with ``-2``, ``-3``, … when a file with that slug already
+        exists (Obsidian style), so two memories with an identical
+        type + slug header can coexist.
+        """
+        folder = self._root / MEMORIES_DIR / self.slugify(memory_type)
+        return self._dedupe_path(folder, self.slugify(content[:80]), ".md")
+
+    def write_memory_mirror(
+        self,
+        memory_type: str,
+        content: str,
+        confidence: float,
+        source: str | None,
+        status: str,
+    ) -> Path:
+        """Write one memory file with Obsidian YAML frontmatter; return its path.
+
+        Frontmatter values are escaped simply (values that could break YAML
+        are double-quoted); ``content`` is written verbatim below it.
+        """
+        target = self.memory_mirror_path(memory_type, content)
+        body = "\n".join(
+            [
+                "---",
+                f"type: {_escape_frontmatter_value(memory_type)}",
+                f"confidence: {confidence}",
+                f"status: {_escape_frontmatter_value(status)}",
+                f"source: {_escape_frontmatter_value(source or '')}",
+                "---",
+                "",
+                content,
+            ]
+        )
+        self.write_text(target, body + "\n")
+        return target
 
     # -- File primitives -------------------------------------------------
 

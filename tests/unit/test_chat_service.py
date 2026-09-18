@@ -78,6 +78,18 @@ class FakeRetrieval:
         return self.hits
 
 
+class FakeMemoryService:
+    """Returns canned approved-memory contents and records queries."""
+
+    def __init__(self, memories: list[str] | None = None) -> None:
+        self.memories = memories if memories is not None else []
+        self.queries: list[str] = []
+
+    async def search_approved(self, query: str, top_k: int = 3) -> list[str]:
+        self.queries.append(query)
+        return self.memories
+
+
 def _hit(chunk_id: str, document_id: str, title: str, content: str, score: float) -> SearchHit:
     return SearchHit(
         chunk_id=chunk_id,
@@ -247,3 +259,76 @@ async def test_chat_records_no_usage_row_without_repository(db_session) -> None:
 
     remaining = await db_session.scalar(select(func.count()).select_from(LLMUsage))
     assert remaining == 0
+
+
+# -- memory section (spec §25) -----------------------------------------------
+
+
+def _service_with_memory(
+    hits: list[SearchHit] | None, memories: list[str]
+) -> tuple[ChatService, FakeLLM, FakeRetrieval, FakeMemoryService]:
+    settings = Settings(_env_file=None, llm_model="test-model")  # type: ignore[arg-type]
+    llm = FakeLLM()
+    retrieval = FakeRetrieval(hits)
+    memory = FakeMemoryService(memories)
+    service = ChatService(llm, retrieval, settings, memory=memory)  # type: ignore[arg-type]
+    return service, llm, retrieval, memory
+
+
+async def test_chat_injects_memory_section_before_knowledge_when_present() -> None:
+    hits = [_hit("chunk-0", "doc-a", "Note A", "alpha content", 0.91)]
+    service, llm, _, memory = _service_with_memory(hits, ["Prefers concise answers"])
+
+    await service.chat("what do I prefer?", top_k=2)
+
+    assert memory.queries == ["what do I prefer?"]
+    user = llm.messages[1]
+    assert "MEMORY\n- Prefers concise answers\n\nKNOWLEDGE" in user.content
+    assert "[1] (Note A) alpha content" in user.content
+    assert user.content.index("MEMORY") < user.content.index("KNOWLEDGE")
+    assert "USER REQUEST\nwhat do I prefer?" in user.content
+
+
+async def test_chat_injects_memory_section_without_knowledge_when_no_hits() -> None:
+    service, llm, _, memory = _service_with_memory([], ["Likes tea"])
+
+    await service.chat("tea?")
+
+    assert memory.queries == ["tea?"]
+    user = llm.messages[1]
+    assert "MEMORY\n- Likes tea\n\nUSER REQUEST\ntea?" in user.content
+    assert "KNOWLEDGE" not in user.content
+
+
+async def test_chat_omits_memory_section_when_search_returns_empty() -> None:
+    service, llm, _, memory = _service_with_memory([], [])
+
+    await service.chat("anything at all?")
+
+    assert memory.queries == ["anything at all?"]
+    user = llm.messages[1]
+    assert "MEMORY" not in user.content
+    assert "USER REQUEST\nanything at all?" in user.content
+
+
+async def test_chat_omits_memory_section_when_memory_service_is_none() -> None:
+    service, llm, _ = _service(hits=[])  # memory not wired
+
+    await service.chat("anything at all?")
+
+    user = llm.messages[1]
+    assert "MEMORY" not in user.content
+    assert "KNOWLEDGE" not in user.content
+    assert "USER REQUEST\nanything at all?" in user.content
+
+
+async def test_chat_logs_memory_chunks_when_memory_present(caplog) -> None:
+    caplog.set_level(logging.INFO, logger="chat_service")
+    service, _, _, _ = _service_with_memory([], ["a", "b"])
+
+    await service.chat("hello")
+
+    records = [r for r in caplog.records if r.name == "chat_service"]
+    assert len(records) == 1
+    assert records[0].memory_chunks == 2
+    assert records[0].retrieved_chunks == 0
