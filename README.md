@@ -9,16 +9,15 @@ The application owns Conversations, Documents, Knowledge, Memories, Embeddings,
 Research, Projects, and Evals. LLM providers (Ollama, PayPerQ, OpenCode Go) only
 provide inference — switching providers never loses or touches your data.
 
-**Current status: Fase 4 — personal memory.**
+**Current status: Fase 5 — tutorial generator.**
 
-Documents live in an Obsidian-compatible vault (`data/vault`, gitignored);
-projects organize knowledge; PDFs are ingested; and the agent now **learns**:
-`POST /memories/extract` turns conversations into candidate memories
-(semantic/episodic/procedural/preference) with secret redaction; approving a
-candidate stores it as a vector AND as a markdown mirror in
-`vault/_memories/` (viewable/editable in Obsidian); approved memories feed the
-chat prompt (MEMORY section). Three LLM providers live with cost accounting.
-Tutorial engine, research agent, evals, and the coding-agent integration are
+Documents live in an Obsidian-compatible vault, projects organize knowledge,
+PDFs are ingested, the agent **learns** memory with a candidate/approve cycle,
+and `POST /tutorials/generate` now writes grounded Spanish step-by-step
+tutorials (spec §20 structure: Objetivo → Fuentes) adapted to your retrieved
+knowledge, project, and memory preferences — each tutorial lands in the vault
+as an editable note and is indexed immediately. Three LLM providers live with
+cost accounting. Research agent, evals, and the coding-agent integration are
 later phases.
 
 ## Architecture
@@ -106,6 +105,7 @@ with any tool — Obsidian works out of the box:
 | POST | `/vault/sync` | Scan the vault: create/update/delete rows+vectors to match files |
 | POST | `/chat` | `{"message": "...", "top_k": 5, "document_id": "...", "project_id": "..."}` → grounded answer + sources |
 | POST | `/memories/extract` | `{"conversation": [{"role", "content"}...]}` → candidate memories (redacted) |
+| POST | `/tutorials/generate` | `{"objective": "...", "project_id": "...", "title": "..."}` → Spanish step-by-step tutorial written to the vault + indexed |
 | GET | `/memories` · `/{id}` | List (`?type=`/`?status=`) / get memories |
 | POST | `/memories/{id}/approve` · `/reject` | Validation gate: approve stores vector + Obsidian mirror |
 | DELETE | `/memories/{id}` | Remove memory (row + vector + mirror) |
@@ -149,6 +149,18 @@ the `personal-knowledge-agent/0.1.0` User-Agent (per the provider docs);
 `gpt-5.6-luna`/`grok-4.6` use the Responses API and are out of scope. All three
 providers were validated live (Fase 2). A fallback provider chain (primary →
 fallback, spec §29) is a planned enhancement.
+
+## Tutorials (Fase 5)
+
+`POST /tutorials/generate` produces a grounded **Spanish** step-by-step
+tutorial (spec §20): `# Objetivo`, `# Prerrequisitos`, `# Materiales`,
+`# Paso N…`, `# Verificación`, `# Troubleshooting`, `# Errores comunes`,
+`# Rollback`, `# Fuentes`. It retrieves the top chunks (scoped to the project
+when given) plus approved memories, adapts the style to your preferences, and
+detects contradictions against the knowledge base (it warns inside the
+tutorial instead of inventing facts). The result is written to the vault
+(`data/vault/<project>/…md`) and indexed on the spot — re-read/sync/delete
+through the documents endpoints.
 
 ## Memory (Fase 4)
 
@@ -203,24 +215,25 @@ uv run ruff check app tests
 
 ```
 app/
-  api/routes/      chat · documents · health · memories · projects · sync · usage
+  api/routes/      chat · documents · health · memories · projects · sync
+                   · tutorials · usage
   core/            config (pydantic-settings) · logging
   domain/models/   Document · Chunk · Project · Memory · LLMUsage (SQLAlchemy 2.0)
   providers/       llm/ (base · ollama · payperq · opencode_go · factory)
                    embeddings/ (base · ollama · factory)
   repositories/    document · project · memory · usage
-  schemas/         document · chat · project · memory · sync · usage
+  schemas/         document · chat · project · memory · sync · tutorial · usage
   services/        chunking · ingestion · retrieval · chat · memory · redaction
-                   sync · vault
+                   sync · tutorial · vault
   vector/          qdrant store (knowledge + memories) · collections constants
 examples/          sample knowledge document
 scripts/           smoke_e2e.py
-odd/tasks/         feature tracking (vertical-slice, phase2-4)
+odd/tasks/         feature tracking (vertical-slice, phase2-5)
 ```
 
 ## Roadmap
 
 Fase 1 vertical slice ✔ → Fase 2 multi-provider ✔ → Fase 3 knowledge vault +
-projects + PDF ✔ → Fase 4 memory (extraction + approval + chat) ✔ → tutorial
-generator → research agent → coding-agent integration → evals → LangGraph
-workflows when stateful multi-step flows demand it.
+projects + PDF ✔ → Fase 4 memory (extraction + approval + chat) ✔ → Fase 5
+tutorial generator ✔ → research agent → coding-agent integration → evals →
+LangGraph workflows when stateful multi-step flows demand it.

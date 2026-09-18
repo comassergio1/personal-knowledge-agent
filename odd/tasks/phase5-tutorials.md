@@ -3,7 +3,7 @@
 **Project**: Personal Knowledge Agent (PKA).
 **Spec source**: `Personal Knowledge Agent.md`, sections 19–20, 25, 37 (Learn mode).
 **Branch policy**: commits on `main`.
-**Status**: in_progress
+**Status**: done — grounded Spanish tutorials to the vault, indexed (2026-09-18)
 
 ## Scope (Phase 5)
 
@@ -30,7 +30,7 @@
 | 2 | Vault write + immediate ingest (reuse VaultService/IngestionService) | pending | |
 | 3 | `POST /tutorials/generate` + schema + wiring (main/dependencies) | pending | |
 | 4 | Tests: prompt assembly, memories in prompt, write+ingest, response shape | pending | |
-| 5 | Live E2E (real stack: generate a guest-VLAN tutorial adapted to Home Lab knowledge + step-by-step preference) + README | pending | |
+| 5 | Live E2E (real stack: generate a guest-VLAN tutorial adapted to Home Lab knowledge + step-by-step preference) + README | done | 56eb3a3 + docs |
 
 ## Acceptance criteria
 
@@ -39,4 +39,9 @@
 
 ## Evidence
 
-- Commit ids appended here as units close.
+- `56eb3a3` feat: tutorial generator with vault persistence and immediate indexing (tasks 1–4).
+
+### Live verification (task 5, real stack — OpenCode Go glm-5.3)
+
+- `POST /tutorials/generate` "Configurar una red WiFi de invitados con VLAN 70" (project Home Lab) → 201, all 14 spec-§20 headers, file `data/vault/home-lab/guia-invitados-vlan-70-mikrotik.md`, sources from the project documents (scores 0.60–0.67).
+- **Contradiction detection live**: knowledge says guests = **VLAN 50**; objective said VLAN 70 — the tutorial warned the user inside the text and recommended 50 instead of inventing (spec §32 spirit).
