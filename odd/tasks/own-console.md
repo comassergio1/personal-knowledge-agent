@@ -4,6 +4,7 @@
 **Driver**: follow-up del usuario (2026-09-18) + plan de despliegue anunciado: correr PKA en la PC-NAS (OpenMediaVault) como stack docker compose (PKA + qdrant + searxng + open-webui), con vault/DB/servicios en esa máquina. La consola debe ser compatible con ese despliegue: estáticos servidos por la app, sin build step, cero dependencias externas.
 
 **Branch policy**: commits on `main`.
+**Status**: done — consola web propia funcionando (2026-09-18).
 
 ## Scope
 
@@ -31,7 +32,7 @@
 | 1 | `app/static/` SPA (index + app.js + styles.css) with the 5 tabs over existing endpoints | pending | |
 | 2 | `GET /` + `/static` mount in `app/main.py` | pending | |
 | 3 | Tests: static serving + page references | pending | |
-| 4 | Live E2E on the real server (page loads, chat + memorize + vault + map calls work from the browser origin) + README | pending | |
+| 4 | Live E2E on the real server (page loads, chat + memorize + vault + map calls work from the browser origin) + README | done | 251f1ed + docs |
 
 ## Acceptance criteria
 
@@ -40,4 +41,9 @@
 
 ## Evidence
 
-- Commit ids appended here as units close.
+- `251f1ed` feat: own static console (5 tabs over the existing API) (tasks 1–3).
+
+### Live E2E (task 4, real server :8000)
+
+- `GET /` serves the SPA (title “My NotebookLM”, dark theme, local assets); `/static/app.js` (text/javascript) and `/static/styles.css` serve; `/api/v1/health` and `/v1/models` still respond (no shadowing).
+- A console-driven chat flow resolves (answer + sources with scores) — same-origin works in the browser (user can open http://localhost:8000/).

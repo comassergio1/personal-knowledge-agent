@@ -157,6 +157,20 @@ chat/coding secondary:
   (`Conceptos`, `Tutoriales`, `Experiencias`, `Recursos`, `Huecos`), citing
   your own material and calling out what is missing.
 
+## Consola (interfaz web propia)
+
+`GET http://localhost:8000/` serves a small static SPA (vanilla JS, no build
+step, works offline inside the LAN container) with the PKA-specific surfaces
+that generic UIs can't show:
+
+- **Chat** — grounded answer + Fuentes with scores.
+- **Aprender** — goal + mode (`do`/`learn`/`deep_learn`) + `allow_research` →
+  the learning loop's tutorial.
+- **Memorias** — list, approve/reject/delete, and extract-from-conversation.
+- **Vault** — documents with `stale` badges, upload, resync, delete, and the
+  append-section form (the two-session edit workflow).
+- **Mapa** — `¿qué sé sobre X?` knowledge map.
+
 ## OpenAI-compatible surface + Open WebUI
 
 PKA speaks the OpenAI wire format, so any OpenAI-compatible client can use the
