@@ -1,5 +1,6 @@
-# Qdrant vector store for PKA. Start with: docker compose up -d
+# Personal Knowledge Agent — self-hosted services. Start with: docker compose up -d
 services:
+  # Qdrant vector store.
   qdrant:
     image: qdrant/qdrant
     restart: unless-stopped
@@ -9,5 +10,18 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  # Self-hosted SearXNG for the research agent (spec §21): JSON API on
+  # localhost:8080, no third-party keys. Repo-shipped settings in
+  # config/searxng/settings.yml enable the JSON endpoint the agent queries.
+  searxng:
+    image: searxng/searxng
+    restart: unless-stopped
+    ports:
+      - "8080:8080" # SearXNG UI + JSON API
+    volumes:
+      - searxng_data:/etc/searxng
+      - ./config/searxng/settings.yml:/etc/searxng/settings.yml:ro
+
 volumes:
   qdrant_data:
+  searxng_data:

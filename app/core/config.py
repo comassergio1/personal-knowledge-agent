@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     chunk_size: int = 1000
     chunk_overlap: int = 120
 
+    # Web search (spec §21): search provider + self-hosted SearXNG JSON API
+    # (see docker-compose.yml). Only `searxng` is implemented so far.
+    search_provider: str = "searxng"
+    searxng_url: str = "http://localhost:8080"
+    searxng_language: str = "es"
+    # Max sources kept in a research report after ranking (default 6).
+    research_max_sources: int = 6
+
     # Obsidian-compatible knowledge vault: markdown files on disk are the
     # source of truth; the directory is gitignored (see .gitignore `data/`).
     # Path is relative to the process working directory (the repo root).

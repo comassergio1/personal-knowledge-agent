@@ -15,7 +15,8 @@ dependencies = [
     "httpx",
     "openai",
     "python-multipart",
-    "pypdf",  # PDF text extraction (Phase 3; the only new dependency)
+    "pypdf",  # PDF text extraction (Phase 3)
+    "trafilatura",  # research page text extraction (Phase 6; the only new dependency)
 ]
 
 [project.optional-dependencies]

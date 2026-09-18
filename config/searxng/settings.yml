@@ -1,0 +1,40 @@
+# SearXNG settings for the Personal Knowledge Agent (spec §21).
+# This enables the JSON API the research agent uses: GET /search?format=json
+# returns machine-readable results without API keys. Searches go out over the
+# enabled engines below; the container binds the UI + API on port 8080.
+#
+# The image auto-generates a random server.secret_key on boot when SEARXNG_SECRET
+# is unset, which is fine for this single-user LAN service (UI sessions reset
+# on restart; the research agent only uses the JSON API).
+
+server:
+  port: 8080
+  limiter: false # personal server: no login rate limiting
+
+search:
+  # `json` in this list enables the JSON endpoint (html keeps the UI usable).
+  formats:
+    - html
+    - json
+  safe_search: 0 # off: full result set for the personal research agent
+
+ui:
+  default_locale: "es"
+
+# Sensible default engines; swap or add more at any time (SearXNG only queries
+# engines it can reach from this machine).
+engines:
+  - name: wikipedia
+    engine: wikipedia
+  - name: google
+    engine: google
+  - name: bing
+    engine: bing
+  - name: duckduckgo
+    engine: duckduckgo
+  - name: github
+    engine: github
+  - name: stackoverflow
+    engine: stackexchange
+  - name: reddit
+    engine: reddit
