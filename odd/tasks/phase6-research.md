@@ -35,13 +35,13 @@
 
 | # | Task | Status | Commit |
 |---|------|--------|--------|
-| 1 | docker-compose `searxng` + `config/searxng/settings.yml` (JSON format) | pending | |
-| 2 | Config: `searxng_url`/`searxng_language`/`research_max_sources` + env.template + contract sync | pending | |
-| 3 | `SearchProvider` abstraction + `SearxngSearchProvider` + factory + tests | pending | |
-| 4 | Content extraction: httpx + trafilatura (offline-testable, snippet fallback) + tests | pending | |
-| 5 | `ResearchService`: interpret → search → dedupe → rank → extract → synthesize → persist | pending | |
-| 6 | `POST /research/run` + schemas + wiring | pending | |
-| 7 | Tests: provider parse, extract, service flow (fakes), route, persist | pending | |
+| 1 | docker-compose `searxng` + `config/searxng/settings.yml` (JSON format) | done | 3aea837 |
+| 2 | Config: `searxng_url`/`searxng_language`/`research_max_sources` + env.template + contract sync | done | 3aea837 |
+| 3 | `SearchProvider` abstraction + `SearxngSearchProvider` + factory + tests | done | 3aea837 |
+| 4 | Content extraction: httpx + trafilatura (offline-testable, snippet fallback) + tests | done | 3aea837 |
+| 5 | `ResearchService`: interpret → search → dedupe → rank → extract → synthesize → persist | in_progress | |
+| 6 | `POST /research/run` + schemas + wiring | in_progress | |
+| 7 | Tests: provider parse, extract, service flow (fakes), route, persist | in_progress | |
 | 8 | Live E2E (real SearXNG + trafilatura + LLM) + README | pending | |
 
 ## Acceptance criteria
@@ -51,4 +51,4 @@
 
 ## Evidence
 
-- Commit ids appended here as units close.
+- `3aea837` feat: SearXNG search provider and trafilatura extraction (tasks 1–4).

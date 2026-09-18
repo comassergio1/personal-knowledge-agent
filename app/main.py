@@ -29,6 +29,7 @@ from app.api.routes.documents import router as documents_router
 from app.api.routes.health import router as health_router
 from app.api.routes.memories import router as memories_router
 from app.api.routes.projects import router as projects_router
+from app.api.routes.research import router as research_router
 from app.api.routes.sync import router as sync_router
 from app.api.routes.tutorials import router as tutorials_router
 from app.api.routes.usage import router as usage_router
@@ -40,6 +41,9 @@ from app.providers.embeddings.base import EmbeddingProvider
 from app.providers.embeddings.factory import EmbeddingProviderFactory
 from app.providers.llm.base import LLMProvider, LLMResult
 from app.providers.llm.factory import LLMProviderFactory
+from app.providers.search.base import SearchHit as GatewaySearchHit
+from app.providers.search.base import SearchProvider
+from app.providers.search.factory import SearchProviderFactory
 from app.repositories.document_repository import DocumentRepository
 from app.repositories.memory_repository import MemoryRepository
 from app.repositories.project_repository import ProjectRepository
@@ -48,6 +52,7 @@ from app.services.chat_service import ChatService
 from app.services.ingestion_service import IngestionService
 from app.services.memory_extractor import MemoryExtractor
 from app.services.memory_service import MemoryService
+from app.services.research_service import ResearchService
 from app.services.retrieval_service import RetrievalService
 from app.services.sync_service import SyncService
 from app.services.tutorial_service import TutorialService
@@ -73,13 +78,31 @@ _logger = get_logger("application")
 # prompts with a canned candidate array so the testing app stays offline.
 _EXTRACTOR_MARKER = "Output ONLY a JSON array"
 
+# Research markers (spec §21): distinguish the query-planner prompt from the
+# report-writer prompt so the fake LLM can answer each with canned content.
+_RESEARCH_INTERPRET_MARKER = "Spanish search queries"
+_RESEARCH_SYNTHESIZE_MARKER = "research writer"
+
+_CANNED_RESEARCH_INTERPRETATION = '["\u00bfqu\u00e9 es asyncio?", "tutorial de asyncio"]'
+
+# The canned report omits the # Fuentes header on purpose so the post-check
+# fires during integration tests, exercising the warnings path end to end.
+_CANNED_RESEARCH_REPORT = (
+    "# Objetivo\n\nResponder la pregunta.\n\n"
+    "# Resumen\n\nResumen breve de los hallazgos.\n\n"
+    "# Hallazgos\n\n1. Hallazgo principal [1].\n\n"
+    "# Contradicciones detectadas\n\nNinguna.\n\n"
+    "# Conclusi\u00f3n\n\nConclusi\u00f3n.\n"
+)
+
 
 class _FakeLLM(LLMProvider):
     """Canned-answer LLM used when ``testing=True`` (no network).
 
     Memory-extraction prompts get a canned candidate array (containing a
-    secret, so redaction is exercised); everything else gets a canned chat
-    answer.
+    secret, so redaction is exercised); research prompts get a canned
+    interpretation and a canned Spanish report; everything else gets a
+    canned chat answer.
     """
 
     name = "fake-llm"
@@ -94,6 +117,10 @@ class _FakeLLM(LLMProvider):
                 'answers (account password=hunter2)", "confidence": 0.9, '
                 '"source": "conversation"}]'
             )
+        elif _RESEARCH_INTERPRET_MARKER in joined:
+            content = _CANNED_RESEARCH_INTERPRETATION
+        elif _RESEARCH_SYNTHESIZE_MARKER in joined:
+            content = _CANNED_RESEARCH_REPORT
         else:
             content = "This is a fake grounded answer."
         return LLMResult(
@@ -186,6 +213,64 @@ class _FakeVectorStore:
         return None
 
 
+# Canned search hits with mixed-quality domains for the offline research
+# endpoint: docs (tier 3), Stack Overflow + Medium (tier 2), Reddit (tier 1)
+# so ranking is observable in tests without a real SearXNG instance.
+_CANNED_SEARCH_HITS = [
+    GatewaySearchHit(
+        title="asyncio — Asynchronous I/O",
+        url="https://docs.python.org/3/library/asyncio.html",
+        snippet="Infrastructure for writing single-threaded concurrent code.",
+        domain="docs.python.org",
+    ),
+    GatewaySearchHit(
+        title="asyncio question on Stack Overflow",
+        url="https://stackoverflow.com/questions/1234/asyncio",
+        snippet="Top answer on asyncio internals.",
+        domain="stackoverflow.com",
+    ),
+    GatewaySearchHit(
+        title="Understanding asyncio",
+        url="https://medium.com/@writer/asyncio-guide",
+        snippet="A practical guide about asyncio.",
+        domain="medium.com",
+    ),
+    GatewaySearchHit(
+        title="asyncio discussion",
+        url="https://www.reddit.com/r/Python/comments/abc/asyncio/",
+        snippet="A reddit thread about asyncio.",
+        domain="www.reddit.com",
+    ),
+]
+
+
+class _FakeSearchProvider:
+    """Canned search results used when ``testing=True`` (no network)."""
+
+    name = "fake-search"
+
+    async def ping(self) -> bool:
+        """The fake instance always answers; tests swap it for the 503 case."""
+        return True
+
+    async def search(self, query: str, *, limit: int = 10) -> list[GatewaySearchHit]:
+        return _CANNED_SEARCH_HITS[:limit]
+
+    async def close(self) -> None:
+        return None
+
+
+def _fake_extract_page_text(
+    url: str, *, client, timeout: float = 15.0, max_chars: int = 20_000
+) -> str | None:
+    """Offline stand-in for ``extract_page_text`` when ``testing=True``.
+
+    Returns ``None`` so the research flow falls back to the canned search
+    snippets — no network and no trafilatura in tests.
+    """
+    return None
+
+
 def _build_engine(settings: Settings) -> AsyncEngine:
     """Build the app-scoped async engine, honoring in-memory SQLite tests."""
     url = make_url(settings.database_url)
@@ -228,6 +313,12 @@ def _make_lifespan(
             # memory points never mix, mirroring the production split.
             memory_store = _FakeVectorStore()
             llm: LLMProvider = _FakeLLM()
+            search_provider: SearchProvider = _FakeSearchProvider()
+            # Page extraction is a module function, so the offline seam swaps
+            # the binding itself (canned snippets become the fallback text).
+            import app.services.research_service as research_service_module
+
+            research_service_module.extract_page_text = _fake_extract_page_text
         else:
             embeddings = EmbeddingProviderFactory.create(
                 settings.embedding_provider, settings
@@ -237,7 +328,9 @@ def _make_lifespan(
                 url=settings.qdrant_url, collection=MEMORIES_COLLECTION
             )
             llm = LLMProviderFactory.create(settings.llm_provider, settings)
-
+            search_provider = SearchProviderFactory.create(
+                settings.search_provider, settings
+            )
         await vector_store.ensure_collection(settings.embedding_dimensions)
         await memory_store.ensure_collection(settings.embedding_dimensions)
         # Dev/test fallback; Alembic remains the canonical schema manager.
@@ -303,15 +396,36 @@ def _make_lifespan(
             settings=settings,
             projects=project_repository,
         )
+        app.state.research_service = ResearchService(
+            llm,
+            search=search_provider,
+            vault=vault_service,
+            ingestion=app.state.ingestion_service,
+            settings=settings,
+            projects=project_repository,
+        )
+        app.state.search_provider = search_provider
 
         _logger.info(
             "application started",
-            extra={"env": settings.app_env, "testing": testing, "llm": llm.name},
+            extra={
+                "env": settings.app_env,
+                "testing": testing,
+                "llm": llm.name,
+                "search": search_provider.name,
+            },
         )
         try:
             yield
         finally:
-            for resource in (vector_store, memory_store, llm, embeddings):
+            for resource in (
+                vector_store,
+                memory_store,
+                llm,
+                embeddings,
+                search_provider,
+                app.state.research_service,
+            ):
                 await _close_resource(resource)
             await ingestion_session.close()
             await usage_session.close()
@@ -343,6 +457,7 @@ def create_app(settings: Settings | None = None, *, testing: bool = False) -> Fa
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(memories_router, prefix="/api/v1")
     app.include_router(projects_router, prefix="/api/v1")
+    app.include_router(research_router, prefix="/api/v1")
     app.include_router(sync_router, prefix="/api/v1")
     app.include_router(tutorials_router, prefix="/api/v1")
     app.include_router(usage_router, prefix="/api/v1")

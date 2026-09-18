@@ -14,11 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.providers.embeddings.base import EmbeddingProvider
 from app.providers.llm.base import LLMProvider
+from app.providers.search.base import SearchProvider
 from app.repositories.memory_repository import MemoryRepository
 from app.repositories.usage_repository import UsageRepository
 from app.services.chat_service import ChatService
 from app.services.ingestion_service import IngestionService
 from app.services.memory_service import MemoryService
+from app.services.research_service import ResearchService
 from app.services.retrieval_service import RetrievalService
 from app.services.sync_service import SyncService
 from app.services.tutorial_service import TutorialService
@@ -96,3 +98,13 @@ def get_sync_service(request: Request) -> SyncService:
 def get_tutorial_service(request: Request) -> TutorialService:
     """Return the shared tutorial service from ``app.state``."""
     return request.app.state.tutorial_service
+
+
+def get_research_service(request: Request) -> ResearchService:
+    """Return the shared research service from ``app.state``."""
+    return request.app.state.research_service
+
+
+def get_search_provider(request: Request) -> SearchProvider:
+    """Return the shared search provider from ``app.state``."""
+    return request.app.state.search_provider
