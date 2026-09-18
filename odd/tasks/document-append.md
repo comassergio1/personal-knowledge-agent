@@ -4,6 +4,7 @@
 **Driver**: user workflow 2026-09-18 — "armame un documento tutorial de X… y en otra sesión, en el documento de X agregá esta sección [pego texto]". The docs are the source of truth (vault files); this closes the edit-by-command loop that resync left open.
 
 **Branch policy**: commits on `main`.
+**Status**: done — edit-by-command loop closed (2026-09-18).
 
 ## Scope
 
@@ -28,7 +29,7 @@
 | 1 | `IngestionService.append_content` (read file → compose → write → re-index via shared helper) | pending | |
 | 2 | `PATCH /documents/{id}/append` + schema + 404/409/422 | pending | |
 | 3 | Tests: unit (compose/re-index/file-less/409) + integration (append → file + detail + retrieval) | pending | |
-| 4 | Live E2E — the two-session workflow: create tutorial doc, then append a pasted section, chat answers it + README | pending | |
+| 4 | Live E2E — the two-session workflow: create tutorial doc, then append a pasted section, chat answers it + README | done | a37dd5d + docs |
 
 ## Acceptance criteria
 
@@ -37,4 +38,10 @@
 
 ## Evidence
 
-- Commit ids appended here as units close.
+- `a37dd5d` feat: append content to vault documents by command (tasks 1–3).
+
+### Live E2E (task 4, real server :8000 — the two-session workflow)
+
+- Session A: `POST /tutorials/generate` "Hacer un backup seguro y automatizado del servidor" (title "Tutorial Backup Servidor", mode do) → doc `80fb57fc…`, file `inbox/tutorial-backup-servidor.md`.
+- Session B: `PATCH /documents/80fb57fc…/append {section: "Presupuesto de discos", text: "…140 USD… 280 USD…"}` → 200, stale False; the vault file now contains `## Presupuesto de discos` (verified via tail).
+- Chat (OpenAI surface): “¿cuánto estimé para discos…?” → answered from the appended section (140 USD/útil estrategia dedicado + off-site). The user's described workflow works end to end.

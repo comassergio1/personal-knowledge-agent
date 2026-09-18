@@ -94,7 +94,7 @@ with any tool — Obsidian works out of the box:
   `POST /vault/sync` reconciles the whole vault (created/updated/deleted).
 - PDF uploads are copied into the vault as `.pdf` and their text is extracted
   (pypdf) for RAG. Exporting markdown → PDF stays your job.
-- Deleting a project removes its documents (rows + vectors + vault files).
+- **Editing by command**: `PATCH /documents/{id}/append {text, section?}` appends a pasted section to a document's vault file and re-indexes it on the spot — create a tutorial in one session, grow it with new sections in later sessions.
 
 ## API (prefix `/api/v1`)
 
@@ -104,6 +104,7 @@ with any tool — Obsidian works out of the box:
 | GET | `/documents` | List documents (optional `?project_id=` filter) |
 | GET | `/documents/{id}` | Detail: file content + `stale` flag (edited on disk?) |
 | POST | `/documents/{id}/resync` | Re-index one document after editing its vault file |
+| PATCH | `/documents/{id}/append` | `{"text": "...", "section": "..."}` → append a pasted section to the vault file + re-index (edit by command) |
 | DELETE | `/documents/{id}` | Delete document (rows + vector points) |
 | POST | `/projects` · GET · DELETE | Project CRUD (DELETE cascades docs + vectors + vault files) |
 | POST | `/vault/sync` | Scan the vault: create/update/delete rows+vectors to match files |
