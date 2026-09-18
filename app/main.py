@@ -426,6 +426,7 @@ def _make_lifespan(
             llm,
             EvalRepository(eval_session),
             settings,
+            documents=document_repository,
         )
 
         _logger.info(

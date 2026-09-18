@@ -11,10 +11,14 @@ memory: runs persist for history only and never pollute prompts or memories.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from app.core.config import Settings
 from app.core.logging import get_logger
 from app.providers.llm.base import LLMProvider
+from app.repositories.document_repository import DocumentRepository
 from app.repositories.eval_repository import EvalRepository
+from app.schemas.chat import SourceRef
 from app.schemas.eval import (
     EvalCaseInput,
     EvalCaseResultRead,
@@ -51,6 +55,7 @@ class EvalService:
         judge_llm: LLMProvider | None,
         repository: EvalRepository,
         settings: Settings,
+        documents: DocumentRepository | None = None,
     ) -> None:
         self._chat = chat
         # ``None`` disables the judge: metrics then come from heuristics only
@@ -58,6 +63,11 @@ class EvalService:
         self._judge_llm = judge_llm
         self._repository = repository
         self._settings = settings
+        # Optional chunk lookup: the judge gets the FULL chunk text (not the
+        # 200-char API excerpt) so groundedness is measured against real
+        # supporting content — evals found 200-char excerpts alone made the
+        # judge declare legitimate claims unsupported.
+        self._documents = documents
 
     async def run(
         self,
@@ -93,7 +103,7 @@ class EvalService:
                     case.question, top_k=top_k, project_id=project_id
                 )
                 answer = chat_result.answer
-                excerpts = [source.excerpt for source in chat_result.sources]
+                excerpts = await self._source_texts(chat_result.sources)
                 source_scores = [float(source.score) for source in chat_result.sources]
                 response_sources = [
                     {"title": source.title, "score": float(source.score)}
@@ -179,6 +189,33 @@ class EvalService:
                 )
             )
         return EvalRunHistoryRead(items=items)
+
+    async def _source_texts(self, sources: Sequence[SourceRef]) -> list[str]:
+        """Full chunk text per source when the repository can resolve it.
+
+        Falls back to the 200-char API excerpt otherwise. Lookups are cached
+        per document and truncated (judge cost control).
+        """
+        if self._documents is None or not sources:
+            return [source.excerpt for source in sources]
+        texts: list[str] = []
+        doc_cache: dict[str, dict[int, str]] = {}
+        for source in sources:
+            chunk_text_value = ""
+            if source.document_id in doc_cache:
+                chunk_text_value = doc_cache[source.document_id].get(
+                    source.chunk_index, ""
+                )
+            elif source.document_id is not None:
+                document = await self._documents.get(source.document_id)
+                if document is not None:
+                    index_map = {
+                        chunk.chunk_index: chunk.content for chunk in document.chunks
+                    }
+                    doc_cache[source.document_id] = index_map
+                    chunk_text_value = index_map.get(source.chunk_index, "")
+            texts.append(chunk_text_value[:1800] or source.excerpt)
+        return texts
 
     async def _judge(self, case, answer: str, excerpts: list[str]) -> dict:
         """One judge call, or ``{}`` (heuristics-only) when no judge is set."""
