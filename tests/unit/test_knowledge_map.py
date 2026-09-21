@@ -171,15 +171,15 @@ async def test_knowledge_map_dedupes_hits_by_title_keeping_the_highest_score() -
     assert "[2] (Nota A) contenido fuerte" in user.content
 
 
-async def test_knowledge_map_truncates_long_chunk_content_to_300_chars() -> None:
-    service, llm, _, _ = _service(hits=[_hit(0, "Nota A", "x" * 500, 0.91)])
+async def test_knowledge_map_truncates_long_chunk_content_to_1800_chars() -> None:
+    service, llm, _, _ = _service(hits=[_hit(0, "Nota A", "x" * 5000, 0.91)])
 
     await service.knowledge_map("redes")
 
     assert llm.messages is not None
     user = llm.messages[1]
     line = next(line for line in user.content.splitlines() if line.startswith("[1]"))
-    assert line == "[1] (Nota A) " + "x" * 300
+    assert line == "[1] (Nota A) " + "x" * 1800
 
 
 async def test_empty_knowledge_still_builds_a_prompt_with_the_huecos_instruction() -> None:

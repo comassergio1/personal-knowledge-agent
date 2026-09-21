@@ -24,8 +24,11 @@ from app.vector.qdrant import SearchHit
 _MAP_HEADER = "# Qué sé sobre"
 # Approved memories fed to the map prompt (spec: top-k 10).
 _MEMORY_TOP_K = 10
-# Chunk excerpt length per KNOWLEDGE line, mirroring the chat prompt.
-_KNOWLEDGE_EXCERPT = 300
+# Chunk excerpt length per KNOWLEDGE line, sized so the LLM sees the full
+# chunk support (the groundedness evaluator in Phase 8 validated 1800 chars
+# as full-chunk context; 300-char slices made the LLM report present
+# concepts as truncated/empty).
+_KNOWLEDGE_EXCERPT = 1800
 
 # Knowledge-map builder persona; the title embeds the topic. The sections are
 # emitted verbatim in Spanish (the map's content language); the writer
@@ -69,7 +72,7 @@ class KnowledgeMapService:
         The topic is embedded and searched for the top-k chunks (scoped to
         ``project_id`` when given) plus the top approved memories. Chunks are
         deduped by title keeping the highest score, so one document never
-        shows twice; every KNOWLEDGE line cites the title plus a 300-char
+        shows twice; every KNOWLEDGE line cites the title plus an 1800-char
         excerpt. The prompt follows the chat/tutorial pattern with a SYSTEM
         knowledge-map persona (embedding the topic), optional MEMORY and
         KNOWLEDGE sections (only when non-empty), and the TOPIC request. A
