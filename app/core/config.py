@@ -66,7 +66,9 @@ class Settings(BaseSettings):
     # (see docker-compose.yml). Only `searxng` is implemented so far.
     search_provider: str = "searxng"
     searxng_url: str = "http://localhost:8080"
-    searxng_language: str = "es"
+    # Comma-separated languages for research queries; each language is queried
+    # in order (es first, then en) and results are merged and deduped by URL.
+    searxng_languages: str = "es,en"
     # Max sources kept in a research report after ranking (default 6).
     research_max_sources: int = 6
 

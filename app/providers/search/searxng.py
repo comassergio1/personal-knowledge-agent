@@ -2,9 +2,11 @@
 
 Queries ``GET /search?q=...&format=json&language=...&safesearch=0`` on the
 configured base URL and maps the JSON ``results`` list to ``SearchHit`` items.
-All transport/JSON/HTTP failures are wrapped in ``SearchError`` with a clear
-message; oddly-shaped result items are skipped defensively (e.g. results from
-engines that report ``image/videos not configured`` quirks).
+The provider issues one request per configured language, in order (Spanish
+first, then English), and merges the hits deduped by URL keeping the first
+occurrence. All transport/JSON/HTTP failures are wrapped in ``SearchError``
+with a clear message; oddly-shaped result items are skipped defensively (e.g.
+results from engines that report ``image/videos not configured`` quirks).
 """
 
 from __future__ import annotations
@@ -22,9 +24,11 @@ from app.providers.search.base import (
 class SearxngSearchProvider(SearchProvider):
     """Search results from a self-hosted SearXNG instance (JSON format)."""
 
-    def __init__(self, base_url: str, language: str, *, timeout: float = 20.0) -> None:
+    def __init__(
+        self, base_url: str, languages: list[str], *, timeout: float = 20.0
+    ) -> None:
         self._base_url = base_url.rstrip("/")
-        self._language = language
+        self._languages = list(languages)
         self._timeout = timeout
         self._client = httpx.AsyncClient(base_url=self._base_url, timeout=timeout)
 
@@ -33,10 +37,28 @@ class SearxngSearchProvider(SearchProvider):
         return "searxng"
 
     async def search(self, query: str, *, limit: int = 10) -> list[SearchHit]:
+        # One request per language in configured order; merge deduped by URL,
+        # keeping the first occurrence (Spanish hits win over English).
+        merged: list[SearchHit] = []
+        seen_urls: set[str] = set()
+        for language in self._languages:
+            hits = await self._search_language(query, language, limit=limit)
+            for hit in hits:
+                if hit.url in seen_urls:
+                    continue
+                seen_urls.add(hit.url)
+                merged.append(hit)
+                if len(merged) >= limit:
+                    return merged
+        return merged
+
+    async def _search_language(
+        self, query: str, language: str, *, limit: int
+    ) -> list[SearchHit]:
         params = {
             "q": query,
             "format": "json",
-            "language": self._language,
+            "language": language,
             "safesearch": 0,
         }
         try:

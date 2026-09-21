@@ -6,7 +6,84 @@
 # - limiter off and safe_search 0 for this single-user LAN personal server
 # - secret_key is required by SearXNG; this is a fixed dev value for a LAN
 #   service (not a real secret — the research agent only uses the JSON API).
-use_default_settings: true
+#
+# Curated engine set (searxng-tuning):
+# The research agent targets official/documentation sources, so the ~260
+# default engines are replaced with a small curated set: general web search,
+# science/publication APIs, and technical wikis. Social engines (reddit,
+# 9gag, ...) previously dominated Spanish results and are excluded entirely;
+# defining an engine list here replaces the defaults (only listed engines stay).
+# `use_default_settings.engines.keep_only` keeps exactly the engines below;
+# a plain `engines:` list would only *merge with* the defaults (name-keyed),
+# leaving every unlisted default engine active. The `engines` block below
+# re-states the kept set (name + enabled) and forces back on the few engines
+# upstream ships `disabled: true` (they are silently skipped by every query,
+# including the JSON API, unless flipped to disabled: false here).
+use_default_settings:
+  engines:
+    keep_only:
+      # general / web
+      - wikipedia
+      - wikidata
+      - duckduckgo
+      - brave
+      - yahoo
+      - yep
+      # science / publications
+      - arxiv
+      - pubmed
+      - europepmc
+      - google scholar
+      - semantic scholar
+      - crossref
+      - openalex
+      # technical / software wikis
+      - arch linux wiki
+      - gentoo
+      - nixos wiki
+      - free software directory
+
+engines:
+  - name: wikipedia
+    enabled: true
+  - name: wikidata
+    enabled: true
+  - name: duckduckgo
+    enabled: true
+  - name: brave
+    enabled: true
+  - name: yahoo
+    enabled: true
+    disabled: false
+  - name: yep
+    enabled: true
+    disabled: false
+  - name: arxiv
+    enabled: true
+  - name: pubmed
+    enabled: true
+  - name: europepmc
+    enabled: true
+  - name: google scholar
+    enabled: true
+  - name: semantic scholar
+    enabled: true
+  - name: crossref
+    enabled: true
+    disabled: false
+  - name: openalex
+    enabled: true
+    disabled: false
+  - name: arch linux wiki
+    enabled: true
+  - name: gentoo
+    enabled: true
+  - name: nixos wiki
+    enabled: true
+    disabled: false
+  - name: free software directory
+    enabled: true
+    disabled: false
 
 server:
   port: 8080

@@ -61,8 +61,10 @@ class FakeResponse:
         return self._payload
 
 
-def _provider() -> SearxngSearchProvider:
-    return SearxngSearchProvider(base_url="http://searxng.test", language="es")
+def _provider(languages: list[str] | None = None) -> SearxngSearchProvider:
+    return SearxngSearchProvider(
+        base_url="http://searxng.test", languages=languages or ["es"]
+    )
 
 
 async def test_search_maps_results(monkeypatch) -> None:
@@ -156,6 +158,143 @@ async def test_search_missing_results_list_raises_search_error(monkeypatch) -> N
 
     with pytest.raises(SearchError, match="results list"):
         await _provider().search("x")
+
+
+async def test_search_no_languages_returns_empty_without_requests(monkeypatch) -> None:
+    requested = False
+
+    async def fake_get(self, url: str, **kwargs):
+        nonlocal requested
+        requested = True
+        return FakeResponse({"results": []})
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    provider = SearxngSearchProvider(base_url="http://searxng.test", languages=[])
+    assert await provider.search("nothing") == []
+    assert requested is False
+
+
+async def test_search_one_request_per_language_in_order(monkeypatch) -> None:
+    seen: list[dict] = []
+
+    async def fake_get(self, url: str, **kwargs):
+        seen.append(kwargs["params"])
+        return FakeResponse({"results": []})
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    await _provider(["es", "en"]).search("python asyncio")
+
+    assert [p["language"] for p in seen] == ["es", "en"]
+    assert all(p["q"] == "python asyncio" for p in seen)
+    assert all(p["format"] == "json" for p in seen)
+
+
+async def test_search_merges_languages_es_first_deduping_by_url(monkeypatch) -> None:
+    payloads = {
+        "es": {
+            "results": [
+                {"url": "https://es.example/1", "title": "es 1"},
+                {"url": "https://shared.example/", "title": "shared es"},
+                {"url": "https://es.example/2", "title": "es 2"},
+            ]
+        },
+        "en": {
+            "results": [
+                {"url": "https://shared.example/", "title": "shared en"},
+                {"url": "https://en.example/1", "title": "en 1"},
+                {"url": "https://en.example/2", "title": "en 2"},
+            ]
+        },
+    }
+
+    async def fake_get(self, url: str, **kwargs):
+        return FakeResponse(payloads[kwargs["params"]["language"]])
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    hits = await _provider(["es", "en"]).search("query")
+
+    # Order is preserved ES-then-EN; the shared URL appears once and keeps the
+    # first (Spanish) occurrence.
+    assert [h.url for h in hits] == [
+        "https://es.example/1",
+        "https://shared.example/",
+        "https://es.example/2",
+        "https://en.example/1",
+        "https://en.example/2",
+    ]
+    assert hits[1].title == "shared es"
+
+
+async def test_search_stops_requesting_once_merged_limit_reached(monkeypatch) -> None:
+    languages_requested: list[str] = []
+    es_payload = {
+        "results": [{"url": f"https://es.example/{i}"} for i in range(3)]
+    }
+
+    async def fake_get(self, url: str, **kwargs):
+        languages_requested.append(kwargs["params"]["language"])
+        return FakeResponse(es_payload)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    hits = await _provider(["es", "en"]).search("query", limit=3)
+
+    # The Spanish hits alone fill the merged limit, so English is never
+    # requested: the merged limit caps both requests and results.
+    assert [h.url for h in hits] == [
+        "https://es.example/0",
+        "https://es.example/1",
+        "https://es.example/2",
+    ]
+    assert languages_requested == ["es"]
+
+
+async def test_search_merged_limit_across_languages(monkeypatch) -> None:
+    payloads = {
+        "es": {
+            "results": [
+                {"url": "https://es.example/1"},
+                {"url": "https://es.example/2"},
+                {"url": "https://es.example/3"},
+            ]
+        },
+        "en": {
+            "results": [
+                {"url": "https://en.example/1"},
+                {"url": "https://en.example/2"},
+                {"url": "https://en.example/3"},
+            ]
+        },
+    }
+
+    async def fake_get(self, url: str, **kwargs):
+        return FakeResponse(payloads[kwargs["params"]["language"]])
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    hits = await _provider(["es", "en"]).search("query", limit=4)
+
+    assert [h.url for h in hits] == [
+        "https://es.example/1",
+        "https://es.example/2",
+        "https://es.example/3",
+        "https://en.example/1",
+    ]
+
+
+async def test_search_error_in_later_language_still_raises(monkeypatch) -> None:
+    async def fake_get(self, url: str, **kwargs):
+        if kwargs["params"]["language"] == "en":
+            raise httpx.TransportError("connection refused")
+        return FakeResponse({"results": [{"url": "https://es.example/1"}]})
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    with pytest.raises(SearchError, match="connection refused"):
+        await _provider(["es", "en"]).search("query")
 
 
 async def test_ping_true_when_server_answers(monkeypatch) -> None:

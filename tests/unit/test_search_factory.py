@@ -23,11 +23,20 @@ def test_create_searxng() -> None:
 def test_create_uses_settings_values() -> None:
     provider = SearchProviderFactory.create(
         "searxng",
-        _settings(searxng_url="http://searxng.local:8080", searxng_language="fr"),
+        _settings(searxng_url="http://searxng.local:8080", searxng_languages="fr,de"),
     )
     assert isinstance(provider, SearxngSearchProvider)
     assert provider._base_url == "http://searxng.local:8080"
-    assert provider._language == "fr"
+    assert provider._languages == ["fr", "de"]
+
+
+def test_create_parses_and_normalizes_language_list() -> None:
+    provider = SearchProviderFactory.create(
+        "searxng", _settings(searxng_languages=" es , en, ")
+    )
+    assert isinstance(provider, SearxngSearchProvider)
+    # Whitespace is stripped and empty segments are dropped, order preserved.
+    assert provider._languages == ["es", "en"]
 
 
 def test_create_normalizes_case_and_whitespace() -> None:

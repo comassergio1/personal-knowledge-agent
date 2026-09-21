@@ -19,9 +19,14 @@ class SearchProviderFactory:
     def create(provider: str, settings: Settings) -> SearchProvider:
         name = provider.strip().lower()
         if name == "searxng":
+            languages = [
+                p.strip()
+                for p in settings.searxng_languages.split(",")
+                if p.strip()
+            ]
             return SearxngSearchProvider(
                 base_url=settings.searxng_url,
-                language=settings.searxng_language,
+                languages=languages,
             )
         raise SearchError(
             f"Unknown search provider {provider!r}; valid choices: searxng"
