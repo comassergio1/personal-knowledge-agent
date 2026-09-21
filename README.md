@@ -203,6 +203,13 @@ POST /v1/chat/completions    → grounded answer + **Fuentes** block (+ SSE stre
 research agent: the fresh report is persisted to the vault and returned in the
 reply (synchronous; a run takes ~1–3 minutes).
 
+**Search sources (SearXNG)**: the research agent searches a curated engine set
+(`config/searxng/settings.yml`) focused on official/documentation sources
+(wikipedia, wikidata, science APIs, technical wikis) instead of the ~260
+engines defaults — social noise (Reddit & co.) no longer dominates results.
+Each query runs bilingual (`SEARXNG_LANGUAGES=es,en`): Spanish first, then
+English, merged deduped by URL. English queries bring official documentation.
+
 **Guard rule:** Open WebUI is a *client*. Do NOT enable its own knowledge/RAG
 or upload documents there — knowledge and memory must live only in PKA
 (no split memory, spec §7/§42).
