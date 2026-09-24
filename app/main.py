@@ -595,4 +595,18 @@ def create_app(settings: Settings | None = None, *, testing: bool = False) -> Fa
     # never shadow /api/v1/* or /v1/*.
     app.include_router(_console_router)
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+
+    # Console assets must never be stuck in a stale browser cache: the SPA
+    # concatenates handlers into one unversioned app.js, so a cached copy
+    # breaks new tabs (the reported “submit returns to chat” symptom).
+    # ``Cache-Control: no-cache`` forces a revalidation on every load (the
+    # server answers 304 when nothing changed), keeping the zero-build
+    # console safe across deploys.
+    @app.middleware("http")
+    async def _no_cache_console_assets(request, call_next):
+        response = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
     return app
