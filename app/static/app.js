@@ -433,24 +433,40 @@ function renderTurn(turn) {
   return div;
 }
 
-async function sendExploreMessage(message) {
-  if (!currentSession) return;
-  setBusy("explore", true);
-  hideError();
-  try {
-    await api(`/api/v1/research/sessions/${currentSession.id}/turn`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
-    });
-    // Reload the thread: the server persisted both the user turn and the
-    // assistant answer (research reports live server-side too).
-    await openSession(currentSession.id);
-  } catch (error) {
-    showError(error.message);
-  } finally {
-    setBusy("explore", false);
+// Client-side trigger copy ONLY for the spinner label; the server owns the
+// actual trigger decision (this list must mirror ResearchChatService's).
+const EXPLORE_TRIGGERS = [
+  "buscar en la web",
+  "busca en internet",
+  "buscá en internet",
+  "buscar en internet",
+  "investigá en la web",
+  "investiga en la web",
+  "investigar en la web",
+  "buscá en la web",
+  "busca en la web",
+];
+
+function exploreSpinnerLabel(message) {
+  const normalized = message.toLowerCase().replace(/\s+/g, " ").trim();
+  return EXPLORE_TRIGGERS.some((trigger) => normalized.includes(trigger))
+    ? "Investigando en la web… puede tardar un minuto."
+    : "Buscando en tus notas…";
+}
+
+function setExploreStatus(text) {
+  const el = document.getElementById("explore-status");
+  el.textContent = text;
+  el.classList.toggle("hidden", !text);
+}
+
+function appendLocalUserTurn(message) {
+  const thread = document.getElementById("explore-thread");
+  if (thread.children.length === 1 && thread.children[0].classList.contains("muted")) {
+    thread.innerHTML = ""; // drop the "no messages yet" placeholder
   }
+  thread.appendChild(renderTurn({ role: "user", content: message, sources: [] }));
+  thread.scrollTop = thread.scrollHeight;
 }
 
 document.getElementById("explore-new").addEventListener("click", async () => {
@@ -476,9 +492,41 @@ document.getElementById("explore-new").addEventListener("click", async () => {
 document.getElementById("explore-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const message = document.getElementById("explore-message").value.trim();
-  if (!message || !currentSession) return;
+  if (!message) {
+    showError("Escribí un mensaje antes de enviar.");
+    return;
+  }
+  hideError();
   document.getElementById("explore-message").value = "";
-  await sendExploreMessage(message);
+  setBusy("explore", true);
+  setExploreStatus(exploreSpinnerLabel(message));
+  appendLocalUserTurn(message);
+  try {
+    // Never fail silently: auto-create a session when none is open.
+    let session = currentSession;
+    if (!session) {
+      session = await api("/api/v1/research/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      currentSession = session;
+      await loadSessions();
+    }
+    await api(`/api/v1/research/sessions/${session.id}/turn`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+    // Reload the thread: the server persisted both the user turn and the
+    // assistant answer (research reports live server-side too).
+    await openSession(session.id);
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    setExploreStatus("");
+    setBusy("explore", false);
+  }
 });
 
 document.getElementById("explore-session").addEventListener("change", (event) => {
