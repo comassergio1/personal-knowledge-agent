@@ -271,6 +271,27 @@ button:not(:disabled):hover {
   white-space: nowrap;
 }
 
+/* --- research sessions (Explorar) --------------------------------------- */
+
+/* The thread is a scrollable column of turns; ``.output`` provides the top
+ * border and spacing, ``.thread`` the height + overflow. */
+.thread {
+  max-height: 55vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.turn-role {
+  font-size: 0.8rem;
+  margin-bottom: 0.2rem;
+}
+
+.turn-user .content {
+  background: var(--panel-alt);
+}
+
 /* --- memories ------------------------------------------------------------ */
 
 .memory-row {

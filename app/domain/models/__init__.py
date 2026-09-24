@@ -7,6 +7,18 @@ from app.domain.models.document import Chunk, Document
 from app.domain.models.eval import EvalCase, EvalRun
 from app.domain.models.memory import Memory
 from app.domain.models.project import Project
+from app.domain.models.research_session import ResearchSession, ResearchTurn
 from app.domain.models.usage import LLMUsage
 
-__all__ = ["Base", "Chunk", "Document", "EvalCase", "EvalRun", "LLMUsage", "Memory", "Project"]
+__all__ = [
+    "Base",
+    "Chunk",
+    "Document",
+    "EvalCase",
+    "EvalRun",
+    "LLMUsage",
+    "Memory",
+    "Project",
+    "ResearchSession",
+    "ResearchTurn",
+]

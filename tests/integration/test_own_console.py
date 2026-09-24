@@ -72,5 +72,6 @@ def test_page_references_assets_and_same_origin_api(test_app: TestClient) -> Non
         "/api/v1/memories/extract",
         "/api/v1/documents",
         "/api/v1/knowledge/map",
+        "/api/v1/research/sessions",
     ):
         assert endpoint in app_js

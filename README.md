@@ -112,6 +112,11 @@ with any tool — Obsidian works out of the box:
 | POST | `/memories/extract` | `{"conversation": [{"role", "content"}...]}` → candidate memories (redacted) |
 | POST | `/tutorials/generate` | `{"objective": "...", "mode": "do|learn|deep_learn", "project_id": "..."}` → depth-aware Spanish tutorial written to the vault + indexed |
 | POST | `/research/run` | `{"question": "...", "project_id": "...", "max_sources": 6}` → Spanish research report with cited sources, saved to the vault (SearXNG + trafilatura) |
+| POST | `/research/sessions` | `{}` → create a research session (server-side, survives refresh) |
+| GET | `/research/sessions` | List sessions (title, updated_at, turn_count) → resume a conversation |
+| GET | `/research/sessions/{id}` | Session detail with its full thread of turns |
+| POST | `/research/sessions/{id}/turn` | `{"message": "..."}` → research on explicit trigger (`buscar en la web …`, `buscá en internet …`), grounded vault answer otherwise (HISTORY + retrieval + memory) |
+| POST | `/research/sessions/{id}/tutorial` | `{"mode": "do|learn|deep_learn"}` → save the session topic as a tutorial in the vault |
 | POST | `/evals/run` | `{"dataset": [{"question", "expected_facts", "adversarial"}...]}` → per-case metrics + verdicts (spec §31/§32) |
 | GET | `/evals/runs` | Eval history (newest first) |
 | POST | `/learn/run` | `{"goal": "...", "mode": "do|learn|deep_learn", "allow_research": true}` → assess → research on demand → tutorial (the learning loop) |
@@ -174,6 +179,13 @@ that generic UIs can't show:
 - **Chat** — grounded answer + Fuentes with scores.
 - **Aprender** — goal + mode (`do`/`learn`/`deep_learn`) + `allow_research` →
   the learning loop's tutorial.
+- **Explorar** — conversational research sessions: create/resume a thread,
+  ask grounded questions (vault answer) or request web research with an
+  explicit trigger (`buscar en la web …`, `busca en internet …`, `buscá en
+  internet …`, `buscar en internet`, `investigá en la web`, `investiga en la
+  web`, `investigar en la web`, `buscá en la web`, `busca en la web`), and
+  save the session topic as a depth-aware tutorial. Sessions persist
+  server-side in SQLite (`research_sessions` / `research_turns`).
 - **Memorias** — list, approve/reject/delete, and extract-from-conversation.
 - **Vault** — documents with `stale` badges, upload, resync, delete, and the
   append-section form (the two-session edit workflow).

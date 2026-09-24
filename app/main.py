@@ -36,6 +36,7 @@ from app.api.routes.learn import router as learn_router
 from app.api.routes.memories import router as memories_router
 from app.api.routes.projects import router as projects_router
 from app.api.routes.research import router as research_router
+from app.api.routes.research_sessions import router as research_sessions_router
 from app.api.routes.sync import router as sync_router
 from app.api.routes.tutorials import router as tutorials_router
 from app.api.routes.usage import router as usage_router
@@ -55,6 +56,7 @@ from app.repositories.document_repository import DocumentRepository
 from app.repositories.eval_repository import EvalRepository
 from app.repositories.memory_repository import MemoryRepository
 from app.repositories.project_repository import ProjectRepository
+from app.repositories.research_session_repository import ResearchSessionRepository
 from app.repositories.usage_repository import UsageRepository
 from app.services.chat_service import ChatService
 from app.services.eval_metrics import JUDGE_PROMPT_MARKER
@@ -64,6 +66,7 @@ from app.services.knowledge_map import KnowledgeMapService
 from app.services.learn_service import LearnService
 from app.services.memory_extractor import MemoryExtractor
 from app.services.memory_service import MemoryService
+from app.services.research_chat_service import ResearchChatService
 from app.services.research_service import ResearchService
 from app.services.retrieval_service import RetrievalService
 from app.services.sync_service import SyncService
@@ -477,6 +480,26 @@ def _make_lifespan(
         )
         app.state.search_provider = search_provider
 
+        # Conversational research sessions (the "Explorar" console tab): they
+        # own an app-lifetime session like the other repositories, and the
+        # service composes the existing research, tutorial, chat and search
+        # components so the offline testing seams stay shared.
+        research_session_session = session_factory()
+        app.state.research_session_repository = ResearchSessionRepository(
+            research_session_session
+        )
+        app.state.research_chat_service = ResearchChatService(
+            llm,
+            retrieval_service,
+            research=app.state.research_service,
+            tutorial=app.state.tutorial_service,
+            search=search_provider,
+            settings=settings,
+            repository=app.state.research_session_repository,
+            usage_repository=usage_repository,
+            memory=memory_service,
+        )
+
         # Phase 7 learning services: the loop reuses the existing research and
         # tutorial instances (so the testing seam's fake search stays offline)
         # and the map layers over memory + retrieval + the LLM. Both only
@@ -529,6 +552,7 @@ def _make_lifespan(
             await ingestion_session.close()
             await usage_session.close()
             await memory_session.close()
+            await research_session_session.close()
             await eval_session.close()
             await engine.dispose()
             _logger.info("application stopped", extra={"env": settings.app_env})
@@ -562,6 +586,7 @@ def create_app(settings: Settings | None = None, *, testing: bool = False) -> Fa
     app.include_router(memories_router, prefix="/api/v1")
     app.include_router(projects_router, prefix="/api/v1")
     app.include_router(research_router, prefix="/api/v1")
+    app.include_router(research_sessions_router, prefix="/api/v1")
     app.include_router(sync_router, prefix="/api/v1")
     app.include_router(tutorials_router, prefix="/api/v1")
     app.include_router(usage_router, prefix="/api/v1")

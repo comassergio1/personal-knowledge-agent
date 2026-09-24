@@ -20,7 +20,7 @@ function $(selector) {
 
 // Per-tab busy flag: disable every button inside the tab panel while a
 // request is in flight, re-enable them when it settles.
-const busy = { chat: false, learn: false, memories: false, vault: false, map: false };
+const busy = { chat: false, learn: false, explore: false, memories: false, vault: false, map: false };
 
 function setBusy(tab, on) {
   busy[tab] = on;
@@ -203,7 +203,7 @@ function renderMd(text) {
 // Tab switching
 // ---------------------------------------------------------------------------
 
-const loaded = { memories: false, vault: false };
+const loaded = { memories: false, vault: false, explore: false };
 
 function activateTab(id) {
   document.querySelectorAll(".tab").forEach((button) => {
@@ -215,6 +215,10 @@ function activateTab(id) {
     panel.classList.toggle("hidden", panel.dataset.panel !== id);
   });
   hideError();
+  if (id === "explore" && !loaded.explore) {
+    loaded.explore = true;
+    loadSessions();
+  }
   if (id === "memories" && !loaded.memories) {
     loaded.memories = true;
     loadMemories();
@@ -319,7 +323,193 @@ document.getElementById("learn-form").addEventListener("submit", async (event) =
 });
 
 // ---------------------------------------------------------------------------
-// Tab 3: Memorias -> list, approve/reject/delete, extract
+// Tab 3: Explorar -> POST/GET /api/v1/research/sessions (research sessions)
+// ---------------------------------------------------------------------------
+
+// The session currently open in the thread view ({id, title, ...} or null).
+let currentSession = null;
+
+async function loadSessions() {
+  const select = document.getElementById("explore-session");
+  setBusy("explore", true);
+  hideError();
+  try {
+    const data = await api("/api/v1/research/sessions");
+    const items = Array.isArray(data.items) ? data.items : [];
+    select.innerHTML = "";
+    if (items.length === 0) {
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "No hay sesiones todavía. Creá una nueva.";
+      select.appendChild(empty);
+    } else {
+      for (const session of items) {
+        const option = document.createElement("option");
+        option.value = session.id;
+        option.textContent = `${session.title} (${session.turn_count} turnos)`;
+        select.appendChild(option);
+      }
+    }
+    if (currentSession && items.some((s) => s.id === currentSession.id)) {
+      select.value = currentSession.id;
+    }
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    setBusy("explore", false);
+  }
+}
+
+async function openSession(id) {
+  setBusy("explore", true);
+  hideError();
+  try {
+    const session = await api(`/api/v1/research/sessions/${id}`);
+    currentSession = session;
+    renderThread(session.turns || []);
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    setBusy("explore", false);
+  }
+}
+
+function renderThread(turns) {
+  const container = document.getElementById("explore-thread");
+  container.innerHTML = "";
+  if (turns.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent =
+      "Todavía no hay mensajes. Escribí una pregunta o pedí una búsqueda web.";
+    container.appendChild(empty);
+    return;
+  }
+  for (const turn of turns) {
+    container.appendChild(renderTurn(turn));
+  }
+  container.scrollTop = container.scrollHeight;
+}
+
+function renderTurn(turn) {
+  const div = document.createElement("div");
+  div.className = `turn turn-${turn.role}`;
+
+  const role = document.createElement("div");
+  role.className = "turn-role muted";
+  role.textContent =
+    turn.role === "user"
+      ? "Vos"
+      : turn.kind === "research"
+        ? "Investigación web"
+        : "Asistente";
+
+  const content = document.createElement("div");
+  content.className = "content";
+  content.innerHTML = renderMd(turn.content || "");
+  div.append(role, content);
+
+  if (Array.isArray(turn.sources) && turn.sources.length > 0) {
+    const ul = document.createElement("ul");
+    ul.className = "sources";
+    for (const source of turn.sources) {
+      const li = document.createElement("li");
+      const title = document.createElement("span");
+      title.textContent = source.title || "(sin título)";
+      li.appendChild(title);
+      if (source.url) {
+        const link = document.createElement("a");
+        link.href = source.url;
+        link.target = "_blank";
+        link.rel = "noopener";
+        link.textContent = source.url;
+        li.appendChild(document.createTextNode(" — "));
+        li.appendChild(link);
+      }
+      ul.appendChild(li);
+    }
+    div.appendChild(ul);
+  }
+  return div;
+}
+
+async function sendExploreMessage(message) {
+  if (!currentSession) return;
+  setBusy("explore", true);
+  hideError();
+  try {
+    await api(`/api/v1/research/sessions/${currentSession.id}/turn`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+    // Reload the thread: the server persisted both the user turn and the
+    // assistant answer (research reports live server-side too).
+    await openSession(currentSession.id);
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    setBusy("explore", false);
+  }
+}
+
+document.getElementById("explore-new").addEventListener("click", async () => {
+  setBusy("explore", true);
+  hideError();
+  try {
+    const session = await api("/api/v1/research/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    currentSession = session;
+    await loadSessions();
+    await openSession(session.id);
+    document.getElementById("explore-message").focus();
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    setBusy("explore", false);
+  }
+});
+
+document.getElementById("explore-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = document.getElementById("explore-message").value.trim();
+  if (!message || !currentSession) return;
+  document.getElementById("explore-message").value = "";
+  await sendExploreMessage(message);
+});
+
+document.getElementById("explore-session").addEventListener("change", (event) => {
+  if (event.target.value) {
+    openSession(event.target.value);
+  }
+});
+
+document.getElementById("explore-tutorial").addEventListener("click", async () => {
+  if (!currentSession) return;
+  const mode = document.getElementById("explore-mode").value;
+  setBusy("explore", true);
+  hideError();
+  try {
+    const result = await api(`/api/v1/research/sessions/${currentSession.id}/tutorial`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    });
+    document.getElementById("explore-tutorial-path").textContent =
+      result.file_path || "—";
+    document.getElementById("explore-tutorial-result").classList.remove("hidden");
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    setBusy("explore", false);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Tab 4: Memorias -> list, approve/reject/delete, extract
 // ---------------------------------------------------------------------------
 
 async function loadMemories() {
@@ -465,7 +655,7 @@ document.getElementById("extract-form").addEventListener("submit", async (event)
 });
 
 // ---------------------------------------------------------------------------
-// Tab 4: Vault -> list (with stale badge), upload, resync, append, delete
+// Tab 5: Vault -> list (with stale badge), upload, resync, append, delete
 // ---------------------------------------------------------------------------
 
 async function loadDocuments() {
@@ -646,7 +836,7 @@ document.getElementById("append-form").addEventListener("submit", async (event) 
 document.getElementById("documents-reload").addEventListener("click", loadDocuments);
 
 // ---------------------------------------------------------------------------
-// Tab 5: Mapa -> GET /api/v1/knowledge/map?topic=...
+// Tab 6: Mapa -> GET /api/v1/knowledge/map?topic=...
 // ---------------------------------------------------------------------------
 
 document.getElementById("map-form").addEventListener("submit", async (event) => {

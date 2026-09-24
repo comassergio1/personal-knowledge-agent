@@ -16,6 +16,7 @@ from app.providers.embeddings.base import EmbeddingProvider
 from app.providers.llm.base import LLMProvider
 from app.providers.search.base import SearchProvider
 from app.repositories.memory_repository import MemoryRepository
+from app.repositories.research_session_repository import ResearchSessionRepository
 from app.repositories.usage_repository import UsageRepository
 from app.services.chat_service import ChatService
 from app.services.eval_service import EvalService
@@ -23,6 +24,7 @@ from app.services.ingestion_service import IngestionService
 from app.services.knowledge_map import KnowledgeMapService
 from app.services.learn_service import LearnService
 from app.services.memory_service import MemoryService
+from app.services.research_chat_service import ResearchChatService
 from app.services.research_service import ResearchService
 from app.services.retrieval_service import RetrievalService
 from app.services.sync_service import SyncService
@@ -126,3 +128,13 @@ def get_research_service(request: Request) -> ResearchService:
 def get_search_provider(request: Request) -> SearchProvider:
     """Return the shared search provider from ``app.state``."""
     return request.app.state.search_provider
+
+
+def get_research_session_repository(request: Request) -> ResearchSessionRepository:
+    """Return the app-scoped research-session repository from ``app.state``."""
+    return request.app.state.research_session_repository
+
+
+def get_research_chat_service(request: Request) -> ResearchChatService:
+    """Return the shared research-chat service from ``app.state``."""
+    return request.app.state.research_chat_service

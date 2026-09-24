@@ -13,6 +13,7 @@
     <nav class="tabs" role="tablist">
       <button type="button" class="tab active" data-tab="chat" role="tab" aria-selected="true">Chat</button>
       <button type="button" class="tab" data-tab="learn" role="tab" aria-selected="false">Aprender</button>
+      <button type="button" class="tab" data-tab="explore" role="tab" aria-selected="false">Explorar</button>
       <button type="button" class="tab" data-tab="memories" role="tab" aria-selected="false">Memorias</button>
       <button type="button" class="tab" data-tab="vault" role="tab" aria-selected="false">Vault</button>
       <button type="button" class="tab" data-tab="map" role="tab" aria-selected="false">Mapa</button>
@@ -70,6 +71,37 @@
         <h3>Fuentes del tutorial</h3>
         <ul id="learn-sources" class="sources"></ul>
         <p id="learn-reflect-hint" class="muted"></p>
+      </div>
+    </section>
+
+    <section id="panel-tab-explore" class="panel hidden" data-panel="explore">
+      <h2>Explorar</h2>
+      <div class="form-row">
+        <button id="explore-new" type="button">Nueva sesión</button>
+        <label for="explore-session">Sesiones</label>
+        <select id="explore-session"></select>
+      </div>
+      <div id="explore-thread" class="output thread"></div>
+      <form id="explore-form">
+        <textarea id="explore-message" rows="3"
+          placeholder="Escribí un mensaje... o pedí una búsqueda web"></textarea>
+        <p class="muted" id="explore-hint">Para investigar en la web usá un disparador
+          (buscar en la web · busca en internet · buscá en internet · buscar en internet
+          · investigá en la web · investiga en la web · investigar en la web · buscá en la web
+          · busca en la web) seguido del tema. Sin disparador, respondo desde tu vault.</p>
+        <div class="form-row">
+          <button id="explore-send" type="submit">Enviar</button>
+          <button id="explore-tutorial" type="button" class="secondary">Guardar como tutorial</button>
+          <label for="explore-mode">Modo</label>
+          <select id="explore-mode">
+            <option value="do">Hacer (do)</option>
+            <option value="learn" selected>Entender (learn)</option>
+            <option value="deep_learn">Profundo (deep_learn)</option>
+          </select>
+        </div>
+      </form>
+      <div id="explore-tutorial-result" class="result-line hidden">
+        Tutorial guardado en el vault: <code id="explore-tutorial-path"></code>
       </div>
     </section>
 
