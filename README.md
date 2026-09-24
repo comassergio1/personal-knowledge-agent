@@ -189,7 +189,30 @@ GET  /v1/models              → "my-notebooklm"
 POST /v1/chat/completions    → grounded answer + **Fuentes** block (+ SSE stream)
 ```
 
-**Connect Open WebUI** (the already-running container):
+## Run in background (launchd)
+
+Start the server once at login and keep it alive (restart on unexpected exit):
+
+```bash
+scripts/install_launchagent.sh install   # install + start (needs your login session)
+scripts/install_launchagent.sh status    # is it loaded? is it running?
+scripts/install_launchagent.sh logs      # tail the server logs
+scripts/install_launchagent.sh uninstall # stop and remove the agent
+```
+
+The agent runs `scripts/run_server.sh` (the exact `uvicorn app.main:create_app`
+command) with logs at `~/Library/Logs/my-notebooklm/`. Dependencies at boot:
+Qdrant already has `restart: unless-stopped` in the compose file; for embeddings
+run `brew services start ollama` (the chat LLM today is PayPerQ via `.env`).
+Reaching the console: http://localhost:8000/.
+
+> **Important (macOS TCC):** the repo must NOT live under `~/Documents`,
+> `~/Desktop` or `~/Downloads` — launchd jobs are denied access to those
+> protected folders by default and the agent fails silently with
+> "Operation not permitted". Keep it in a plain path like
+> `~/proyectos/personal-knowledge-agent`.
+
+## Connect Open WebUI (the already-running container):
 
 1. Open WebUI → Settings → **Connections/Model Providers** → **OpenAI API**.
 2. URL: `http://host.docker.internal:8000/v1` (Docker Desktop macOS/Windows).
