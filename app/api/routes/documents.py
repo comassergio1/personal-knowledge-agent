@@ -8,7 +8,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_db, get_ingestion_service, get_vector_store
+from app.api.dependencies import (
+    get_db,
+    get_ingestion_service,
+    get_vault_service,
+    get_vector_store,
+)
 from app.domain.models.document import Document
 from app.repositories.document_repository import DocumentRepository
 from app.schemas.document import (
@@ -18,6 +23,7 @@ from app.schemas.document import (
     DocumentRead,
 )
 from app.services.ingestion_service import IngestionService, ResyncError
+from app.services.vault_service import VaultService
 from app.vector.qdrant import QdrantVectorStore
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -144,10 +150,21 @@ async def delete_document(
     document_id: str,
     session: Annotated[AsyncSession, Depends(get_db)],
     vector_store: Annotated[QdrantVectorStore, Depends(get_vector_store)],
+    vault: Annotated[VaultService, Depends(get_vault_service)],
 ) -> None:
-    """Delete a document's vector points and rows; 404 when it is missing."""
+    """Delete a document's vault file, vector points, and rows.
+
+    The vault markdown is the source of truth: a plain index removal would be
+    re-ingested by the next ``POST /vault/sync`` (new files on disk are
+    ingested), resurrecting the document. Unlinking the source file too makes
+    the deletion permanent. ``VaultService.delete`` ignores a file that is
+    already gone, and a document without an on-disk file deletes cleanly.
+    """
     repository = DocumentRepository(session)
-    if await repository.get(document_id) is None:
+    document = await repository.get(document_id)
+    if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
+    if document.file_path:
+        vault.delete(document.file_path)
     await vector_store.delete_by_document(document_id)
     await repository.delete(document_id)

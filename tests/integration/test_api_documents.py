@@ -90,17 +90,20 @@ def test_list_filters_by_project(test_app: TestClient) -> None:
     assert empty["total"] == 0
 
 
-def test_delete_removes_rows_and_vector_points(test_app: TestClient) -> None:
+def test_delete_removes_rows_and_vector_points(test_app: TestClient, tmp_path: Path) -> None:
     document_id = test_app.post(
         "/api/v1/documents",
         files={"file": ("note.md", b"To be removed.", "text/markdown")},
     ).json()["id"]
     vector_store = test_app.app.state.vector_store
+    vault_file = tmp_path / "vault" / "inbox" / "note.md"
+    assert vault_file.exists()
 
     response = test_app.delete(f"/api/v1/documents/{document_id}")
 
     assert response.status_code == 204
     assert vector_store.deleted_documents == [document_id]
+    assert not vault_file.exists()  # the source file is removed too
     assert test_app.get("/api/v1/documents").json()["total"] == 0
 
 

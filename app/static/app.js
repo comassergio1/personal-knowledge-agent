@@ -841,7 +841,12 @@ async function resyncDocument(id) {
 }
 
 async function deleteDocument(id) {
-  if (!window.confirm("¿Eliminar este documento y sus índices vectoriales?")) return;
+  if (
+    !window.confirm(
+      "¿Eliminar este documento, su archivo en el vault y sus índices? No se puede deshacer."
+    )
+  )
+    return;
   setBusy("vault", true);
   hideError();
   try {
